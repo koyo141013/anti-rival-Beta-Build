@@ -1,7 +1,7 @@
--- [Anti-rival beta v0.1.17 재배포 금지 재배포 시 IP 딸거임]
+-- [Anti-rival beta v0.1.18 재배포 금지 재배포 시 IP 딸거임]
 
 local KEY_SYSTEM_ENABLED = true
-local CORRECT_KEY = "riogioaguioawoiufawioawiio"
+local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
 local WORK_INK_URL = "https://link-center.net/8373580/1QODzu8DuANE"
 
 local Players = game:GetService("Players")
@@ -16,7 +16,7 @@ local CONFIG_FILE_NAME = "AntiRival_SavedKey.json"
 
 local function getSavedKey()
 	if isfile and isfile(CONFIG_FILE_NAME) then
-		local success, decoded = pcall(function()
+		local success, decoded = pcall(function(a)
 			return game:GetService("HttpService"):JSONDecode(readfile(CONFIG_FILE_NAME))
 		end)
 		if success and type(decoded) == "table" then
@@ -272,6 +272,173 @@ local function initMainScript()
 			end
 			return conn
 		end
+
+		local function setupSkinChanger(miscPage, createGroupBox)
+			local gSkin = createGroupBox(miscPage, "skin + wrap changer (client)", UDim2.fromOffset(418, 260), UDim2.fromOffset(12, 236))
+			local weaponNames, wrapNames, skinNames = {}, {}, {}
+			local weaponIdx, wrapIdx, skinIdx = 1, 1, 1
+			local weaponsFolder, wrapsFolder = nil, nil
+			local skinLookup = {}
+
+			pcall(function()
+				local assets = player:WaitForChild("PlayerScripts", 5):WaitForChild("Assets", 5)
+				if not assets then return end
+				local vm = assets:FindFirstChild("ViewModels")
+				if vm then
+					weaponsFolder = vm:FindFirstChild("Weapons")
+					if weaponsFolder then
+						for _, w in ipairs(weaponsFolder:GetChildren()) do
+							table.insert(weaponNames, w.Name)
+						end
+						table.sort(weaponNames)
+					end
+					for _, child in ipairs(vm:GetChildren()) do
+						local n = child.Name:lower()
+						if n:find("skin") or n:find("case") then
+							for _, sk in ipairs(child:GetChildren()) do
+								if not skinLookup[sk.Name] then
+									skinLookup[sk.Name] = sk
+									table.insert(skinNames, sk.Name)
+								end
+							end
+						elseif child.Name ~= "Weapons" and child.Name ~= "FirstPerson" then
+							for _, sk in ipairs(child:GetChildren()) do
+								if not skinLookup[sk.Name] then
+									skinLookup[sk.Name] = sk
+									table.insert(skinNames, sk.Name)
+								end
+							end
+						end
+					end
+					table.sort(skinNames)
+				end
+				wrapsFolder = assets:FindFirstChild("WrapTextures")
+				if wrapsFolder then
+					for _, w in ipairs(wrapsFolder:GetChildren()) do
+						table.insert(wrapNames, w.Name)
+					end
+					table.sort(wrapNames)
+				end
+			end)
+
+			local function mkBtn(y, text)
+				local b = Instance.new("TextButton")
+				b.Size = UDim2.new(1, -16, 0, 24)
+				b.Position = UDim2.fromOffset(8, y)
+				b.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+				b.BorderColor3 = Color3.fromRGB(40, 40, 50)
+				b.BorderSizePixel = 1
+				b.Text = text
+				b.TextColor3 = Color3.fromRGB(180, 180, 195)
+				b.TextSize, b.Font = 11, Enum.Font.Code
+				b.Parent = gSkin
+				return b
+			end
+
+			local weaponBtn = mkBtn(22, #weaponNames > 0 and ("Weapon: " .. weaponNames[1]) or "Weapon: (none)")
+			local skinBtn = mkBtn(52, #skinNames > 0 and ("Skin: " .. skinNames[1]) or "Skin: (none found)")
+			local wrapBtn = mkBtn(82, #wrapNames > 0 and ("Wrap: " .. wrapNames[1]) or "Wrap: (none)")
+
+			weaponBtn.MouseButton1Click:Connect(function()
+				if #weaponNames == 0 then return end
+				weaponIdx = weaponIdx % #weaponNames + 1
+				weaponBtn.Text = "Weapon: " .. weaponNames[weaponIdx]
+			end)
+			skinBtn.MouseButton1Click:Connect(function()
+				if #skinNames == 0 then return end
+				skinIdx = skinIdx % #skinNames + 1
+				skinBtn.Text = "Skin: " .. skinNames[skinIdx]
+			end)
+			wrapBtn.MouseButton1Click:Connect(function()
+				if #wrapNames == 0 then return end
+				wrapIdx = wrapIdx % #wrapNames + 1
+				wrapBtn.Text = "Wrap: " .. wrapNames[wrapIdx]
+			end)
+
+			local function applySkin()
+				if not weaponsFolder or #weaponNames == 0 or #skinNames == 0 then return end
+				local weapon = weaponsFolder:FindFirstChild(weaponNames[weaponIdx])
+				local skinSrc = skinLookup[skinNames[skinIdx]]
+				if not weapon or not skinSrc then return end
+				pcall(function()
+					local toRemove = {}
+					for _, c in ipairs(weapon:GetChildren()) do
+						if c:IsA("BasePart") or c:IsA("MeshPart") or c:IsA("Model") or c:IsA("Folder") then
+							table.insert(toRemove, c)
+						end
+					end
+					for _, c in ipairs(toRemove) do c:Destroy() end
+					for _, c in ipairs(skinSrc:GetChildren()) do
+						c:Clone().Parent = weapon
+					end
+				end)
+				print("[Anti-rival] Skin", skinNames[skinIdx], "->", weaponNames[weaponIdx])
+			end
+
+			local function applyWrap()
+				if not weaponsFolder or not wrapsFolder or #weaponNames == 0 or #wrapNames == 0 then return end
+				local weapon = weaponsFolder:FindFirstChild(weaponNames[weaponIdx])
+				local wrapSrc = wrapsFolder:FindFirstChild(wrapNames[wrapIdx])
+				if not weapon or not wrapSrc then return end
+				pcall(function()
+					for _, d in ipairs(weapon:GetDescendants()) do
+						if d:IsA("BasePart") and d.Transparency ~= 1 then
+							for _, t in ipairs(d:GetChildren()) do
+								if t:IsA("Texture") or t:IsA("Decal") or t:IsA("SurfaceAppearance") then t:Destroy() end
+							end
+							for _, c in ipairs(wrapSrc:GetChildren()) do
+								if c:IsA("Decal") or c:IsA("Texture") or c:IsA("SurfaceAppearance") then
+									c:Clone().Parent = d
+								end
+							end
+						end
+					end
+				end)
+				print("[Anti-rival] Wrap", wrapNames[wrapIdx], "->", weaponNames[weaponIdx])
+			end
+
+			local function smallBtn(text, xScale, y, bg, bd, cb)
+				local b = Instance.new("TextButton")
+				b.Size = UDim2.new(0.48, -10, 0, 26)
+				b.Position = UDim2.new(xScale, (xScale > 0) and 2 or 8, 0, y)
+				b.BackgroundColor3 = bg
+				b.BorderColor3 = bd
+				b.BorderSizePixel = 1
+				b.Text = text
+				b.TextColor3 = Color3.fromRGB(100, 180, 255)
+				b.TextSize, b.Font = 11, Enum.Font.Code
+				b.Parent = gSkin
+				b.MouseButton1Click:Connect(cb)
+			end
+
+			smallBtn("Apply Skin", 0, 116, Color3.fromRGB(25, 55, 40), Color3.fromRGB(45, 95, 65), applySkin)
+			smallBtn("Apply Wrap", 0.52, 116, Color3.fromRGB(25, 40, 70), Color3.fromRGB(50, 80, 130), applyWrap)
+			smallBtn("Random Skin", 0, 150, Color3.fromRGB(40, 30, 55), Color3.fromRGB(80, 60, 110), function()
+				if #skinNames == 0 then return end
+				skinIdx = math.random(1, #skinNames)
+				skinBtn.Text = "Skin: " .. skinNames[skinIdx]
+				applySkin()
+			end)
+			smallBtn("Random Wrap", 0.52, 150, Color3.fromRGB(40, 30, 55), Color3.fromRGB(80, 60, 110), function()
+				if #wrapNames == 0 then return end
+				wrapIdx = math.random(1, #wrapNames)
+				wrapBtn.Text = "Wrap: " .. wrapNames[wrapIdx]
+				applyWrap()
+			end)
+
+			local tip = Instance.new("TextLabel")
+			tip.Size = UDim2.new(1, -16, 0, 40)
+			tip.Position = UDim2.fromOffset(8, 186)
+			tip.BackgroundTransparency = 1
+			tip.Text = "Client only. Re-equip gun / respawn after apply.\nSkin = model | Wrap = texture"
+			tip.TextColor3 = Color3.fromRGB(120, 120, 140)
+			tip.TextSize, tip.Font = 10, Enum.Font.Code
+			tip.TextXAlignment = Enum.TextXAlignment.Left
+			tip.TextYAlignment = Enum.TextYAlignment.Top
+			tip.Parent = gSkin
+		end
+
+
 
 		-- ============================================================
 		-- SILENT AIM v4 (Utility.Raycast) - dummies + players
@@ -942,7 +1109,7 @@ local function initMainScript()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.1.17 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.1.18 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -960,7 +1127,7 @@ local function initMainScript()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.1.17 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.1.18 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -987,7 +1154,7 @@ local function initMainScript()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.17)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.18)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1207,7 +1374,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.1.17 - discord.gg/6tCjcYUt7"
+		title.Text = "Anti-rival beta v0.1.18 - discord.gg/6tCjcYUt7"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -1989,6 +2156,8 @@ local function initMainScript()
 			end)
 		end)
 
+		pcall(function() setupSkinChanger(miscPage, createGroupBox) end)
+
 		local gSet1 = createGroupBox(settingPage, "ui & configurations", UDim2.fromOffset(418, 360), UDim2.fromOffset(12, 12))
 		local showKeybindsButton = toggle(gSet1, "show keybinds", UDim2.fromOffset(8, 22))
 		setToggle(showKeybindsButton, S.showKeybindsOn, "show keybinds")
@@ -2650,7 +2819,7 @@ local function initMainScript()
 		noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
 
 		showPage("main")
-		print("Anti-rival beta v0.1.17 Enhanced & Loaded Successfully! (Silent Aim v4 + FOV/Target/HitPart + Triggerbot)")
+		print("Anti-rival beta v0.1.18 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin/Wrap Changer + Triggerbot)")
 	end)
 end
 
@@ -2690,7 +2859,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.17)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.18)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
