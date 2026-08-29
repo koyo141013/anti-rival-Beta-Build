@@ -1721,7 +1721,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "     Anti-rival beta v0.1.19  -  https://discord.gg/seSN5dv5p  ㅣ RIVALS"
+		title.Text = "     Anti-rival beta v0.1.19  -  https://discord.gg/seSN5dv5p                     ㅣ RIVALS"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
