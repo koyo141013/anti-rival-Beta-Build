@@ -2118,7 +2118,7 @@ local function initMainScript()
 		local teleporterSlider = createSlider(gVis1, "teleport distance", 1000, 1000000, S.teleportDistance, UDim2.fromOffset(8, 82), function(val)
 			S.teleportDistance = val
 		end)
-		local teleporterButton = toggle(gVis1, "auto 50k tp (every 1s)", UDim2.fromOffset(8, 124))
+		local teleporterButton = toggle(gVis1, "auto 50k tp (every 5s)", UDim2.fromOffset(8, 124))
 
 		local randomTpButton = Instance.new("TextButton")
 		randomTpButton.Size = UDim2.new(1, -16, 0, 26)
@@ -2671,7 +2671,7 @@ local function initMainScript()
 						end)
 					elseif keybinds.autoTp ~= Enum.KeyCode.Unknown and input.KeyCode == keybinds.autoTp then
 						S.teleporterOn = not S.teleporterOn
-						setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)")
+						setToggle(teleporterButton, S.teleporterOn, "auto 50k tp")
 					elseif keybinds.orbit ~= Enum.KeyCode.Unknown and input.KeyCode == keybinds.orbit then
 						S.orbitOn = not S.orbitOn
 						if S.orbitOn then S.voidSpanOn = false; setToggle(voidSpanButton, false, "void span mode") end
@@ -3077,7 +3077,7 @@ local function initMainScript()
 		trackConn(RunService.RenderStepped:Connect(function()
 			if not S.teleporterOn then return end
 			local now = os.clock()
-			if now - S.lastTeleportTick >= 1.0 then
+			if now - S.lastTeleportTick >= 5.0 then
 				S.lastTeleportTick = now
 				pcall(function()
 					local _, root = getSafeParts()
@@ -3162,11 +3162,11 @@ local function initMainScript()
 			setToggle(voidSpanButton, S.voidSpanOn, "void span mode")
 		end)
 
-		teleporterButton.MouseButton1Click:Connect(function() S.teleporterOn = not S.teleporterOn; setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)") end)
+		teleporterButton.MouseButton1Click:Connect(function() S.teleporterOn = not S.teleporterOn; setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 5s)") end)
 		noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
 
 		showPage("main")
-		print("Anti-rival beta v0.1.19 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Triggerbot)")
+		print("Anti-rival beta v0.1.19 Enhanced & Loaded Successfully!")
 	end)
 end
 
