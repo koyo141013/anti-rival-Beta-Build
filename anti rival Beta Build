@@ -1,4 +1,4 @@
--- [Anti-rival beta v0.1.18 재배포 금지 재배포 시 IP 딸거임]
+-- [Anti-rival beta v0.1.19 재배포 금지 재배포 시 IP 딸거임]
 
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
@@ -274,171 +274,518 @@ local function initMainScript()
 		end
 
 		local function setupSkinChanger(miscPage, createGroupBox)
-			local gSkin = createGroupBox(miscPage, "skin + wrap changer (client)", UDim2.fromOffset(418, 260), UDim2.fromOffset(12, 236))
-			local weaponNames, wrapNames, skinNames = {}, {}, {}
-			local weaponIdx, wrapIdx, skinIdx = 1, 1, 1
-			local weaponsFolder, wrapsFolder = nil, nil
-			local skinLookup = {}
+			local gSkin = createGroupBox(miscPage, "skin changer (client)", UDim2.fromOffset(418, 90), UDim2.fromOffset(12, 236))
 
-			pcall(function()
-				local assets = player:WaitForChild("PlayerScripts", 5):WaitForChild("Assets", 5)
-				if not assets then return end
-				local vm = assets:FindFirstChild("ViewModels")
-				if vm then
+			local openBtn = Instance.new("TextButton")
+			openBtn.Size = UDim2.new(1, -16, 0, 32)
+			openBtn.Position = UDim2.fromOffset(8, 22)
+			openBtn.BackgroundColor3 = Color3.fromRGB(25, 40, 70)
+			openBtn.BorderColor3 = Color3.fromRGB(50, 80, 130)
+			openBtn.BorderSizePixel = 1
+			openBtn.Text = "Open Skin Menu"
+			openBtn.TextColor3 = Color3.fromRGB(100, 180, 255)
+			openBtn.TextSize, openBtn.Font = 12, Enum.Font.Code
+			openBtn.Parent = gSkin
+
+			local statusLbl = Instance.new("TextLabel")
+			statusLbl.Size = UDim2.new(1, -16, 0, 18)
+			statusLbl.Position = UDim2.fromOffset(8, 58)
+			statusLbl.BackgroundTransparency = 1
+			statusLbl.Text = "Only skins for selected weapon"
+			statusLbl.TextColor3 = Color3.fromRGB(120, 120, 140)
+			statusLbl.TextSize, statusLbl.Font = 10, Enum.Font.Code
+			statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+			statusLbl.Parent = gSkin
+
+			local function norm(s)
+				return (tostring(s or "")):lower():gsub("[^a-z0-9]", "")
+			end
+
+			-- Official-ish skin name -> weapon (from Rivals wiki). Keys are normalized.
+			local SKIN_TO_WEAPON = {
+				-- Assault Rifle
+				ak47="Assault Rifle", aug="Assault Rifle", tommygun="Assault Rifle", boneclawrifle="Assault Rifle",
+				gingerbreadaug="Assault Rifle", pearlrifle="Assault Rifle", phoenixrifle="Assault Rifle", akey47="Assault Rifle",
+				-- Energy Rifle
+				hackerrifle="Energy Rifle", hydrorifle="Energy Rifle", voidrifle="Energy Rifle", soulrifle="Energy Rifle",
+				newyearenergyrifle="Energy Rifle", ["2025energyrifle"]="Energy Rifle", apexrifle="Energy Rifle",
+				solrifle="Energy Rifle", gloriousenergyrifle="Energy Rifle",
+				-- Energy Pistols
+				hydropistols="Energy Pistols", voidpistols="Energy Pistols",
+				-- Knife
+				chancla="Knife", karambit="Knife", balisong="Knife", keyper="Knife", machete="Knife",
+				birthdaycandle="Knife", sharktooth="Knife",
+				-- Bow
+				compoundbow="Bow", ravenbow="Bow", dreambow="Bow", batbow="Bow", frostbitebow="Bow", palmbow="Bow",
+				-- Burst Rifle
+				aquaburst="Burst Rifle", electroburst="Burst Rifle", electroburstrifle="Burst Rifle", famas="Burst Rifle",
+				pineburst="Burst Rifle", spectralburst="Burst Rifle",
+				-- Chainsaw
+				blobsaw="Chainsaw", handsaws="Chainsaw", megadrill="Chainsaw", sharksaw="Chainsaw",
+				-- Crossbow
+				pixelcrossbow="Crossbow", violincrossbow="Crossbow", harpooncrossbow="Crossbow",
+				frostbitecrossbow="Crossbow", campfirecrossbow="Crossbow", crossbone="Crossbow",
+				-- Daggers
+				aces="Daggers", shurikens="Daggers", paperplanes="Daggers", starfish="Daggers",
+				-- Distortion
+				plasmadistortion="Distortion", cyberdistortion="Distortion", electropunkdistortion="Distortion",
+				-- Exogun
+				singularity="Exogun", wondergun="Exogun", repulsor="Exogun", midnightfestiveexogun="Exogun",
+				-- Flamethrower
+				pixelflamethrower="Flamethrower", lamethrower="Flamethrower", glitterthrower="Flamethrower",
+				-- Flare Gun
+				fireworkgun="Flare Gun", dynamitegun="Flare Gun", bananaflare="Flare Gun", wrappedflaregun="Flare Gun",
+				-- Freeze Ray
+				bubbleray="Freeze Ray", temporalray="Freeze Ray", gumray="Freeze Ray", wrappedfreezeray="Freeze Ray",
+				-- Fists
+				boxinggloves="Fists", brassknuckles="Fists", fistsofhurt="Fists", festivefists="Fists",
+				pumpkinclaws="Fists", spygloves="Fists",
+				-- Grenade
+				waterballoon="Grenade", whoopeecushion="Grenade", dynamite="Grenade", frozengrenade="Grenade",
+				-- Grenade Launcher
+				swashbuckler="Grenade Launcher", uraniumlauncher="Grenade Launcher", gearnadelauncher="Grenade Launcher",
+				-- Handgun
+				blaster="Handgun", gumballhandgun="Handgun", pumpkinhandgun="Handgun", towerstonehandgun="Handgun",
+				vampirehandgun="Handgun",
+				-- Katana
+				lightningbolt="Katana", saber="Katana", stellarkatana="Katana", swordfish="Katana",
+				-- Medkit
+				laptop="Medkit", sandwich="Medkit", briefcase="Medkit", medkitty="Medkit",
+				-- Minigun
+				lasergun3000="Minigun", pixelminigun="Minigun", fighterjet="Minigun", pumpkinminigun="Minigun", wrappedminigun="Minigun",
+				-- Paintball Gun
+				bobagun="Paintball Gun", slimegun="Paintball Gun", ketchupgun="Paintball Gun", lemonadegun="Paintball Gun",
+				-- Revolver
+				sheriff="Revolver", deserteagle="Revolver", peppergun="Revolver",
+				-- RPG
+				nukelauncher="RPG", spaceshiplauncher="RPG", squidlauncher="RPG", pencillauncher="RPG",
+				-- Scythe
+				anchor="Scythe", scytheofdeath="Scythe", keythe="Scythe", sakurascythe="Scythe", plasticflamingo="Scythe",
+				-- Shotgun
+				balloonshotgun="Shotgun", cactusshotgun="Shotgun", wrappedshotgun="Shotgun",
+				-- Shorty
+				notsoshorty="Shorty", lovelyshorty="Shorty", tooshorty="Shorty", wrappedshorty="Shorty",
+				-- Slingshot
+				goalpost="Slingshot", stick="Slingshot", palmshot="Slingshot",
+				-- Sniper
+				pixelsniper="Sniper", hypersniper="Sniper", eyethingsniper="Sniper", campfiresniper="Sniper",
+				-- Uzi
+				electrouzi="Uzi", wateruzi="Uzi", duckyuzi="Uzi", pineuzi="Uzi",
+				-- Battle Axe
+				theshred="Battle Axe", banaxe="Battle Axe", nordicaxe="Battle Axe", ceruleanaxe="Battle Axe", tikiaxe="Battle Axe",
+				-- Gunblade
+				hypergunblade="Gunblade", gunsaw="Gunblade", boneblade="Gunblade", crudegunblade="Gunblade",
+				elfsgunblade="Gunblade", sharkbite="Gunblade",
+				-- Riot Shield
+				door="Riot Shield", masterpiece="Riot Shield", brokensurfboard="Riot Shield", sled="Riot Shield", tombstoneshield="Riot Shield",
+				-- Satchel
+				advancedsatchel="Satchel", bagomoney="Satchel", bagomoney2="Satchel", lifeguardsatchel="Satchel",
+				notebooksatchel="Satchel", suspiciousgift="Satchel",
+				-- Flashbang
+				discoball="Flashbang", lightbulb="Flashbang", skullbang="Flashbang",
+				-- Jump Pad
+				trampoline="Jump Pad", flamingofloatie="Jump Pad", spiderweb="Jump Pad",
+				-- Molotov
+				coffee="Molotov", torch="Molotov", lavalamp="Molotov", campfirestick="Molotov",
+				-- Spray
+				lovelyspray="Spray", nailgun="Spray", pinespray="Spray", bottlespray="Spray",
+				-- Subspace Tripmine
+				dontpress="Subspace Tripmine", spring="Subspace Tripmine", diytripmine="Subspace Tripmine", trickortreat="Subspace Tripmine",
+				-- War Horn
+				megaphone="War Horn", airhorn="War Horn", mammothhorn="War Horn",
+				-- Warpstone
+				cyberwarpstone="Warpstone", warpbone="Warpstone",
+				-- Permafrost
+				icepermafrost="Permafrost", snowmanpermafrost="Permafrost",
+				-- Maul
+				giantpopsicle="Maul", icemaul="Maul",
+				-- Spear
+				giantpencil="Spear", charkkebab="Spear", studiolight="Spear",
+				-- Grappler
+				lifeguardgrappler="Grappler",
+			}
+
+			local function resolveWeaponForSkin(sk)
+				-- 1) Attribute / StringValue on instance
+				local okAttr, attr = pcall(function() return sk:GetAttribute("Weapon") end)
+				if okAttr and type(attr) == "string" and #attr > 0 then return attr end
+				for _, c in ipairs(sk:GetChildren()) do
+					if c:IsA("StringValue") and (c.Name:lower() == "weapon" or c.Name:lower() == "weaponname") then
+						if c.Value and #c.Value > 0 then return c.Value end
+					end
+				end
+				-- 2) Official map
+				local key = norm(sk.Name)
+				if SKIN_TO_WEAPON[key] then return SKIN_TO_WEAPON[key] end
+				-- 3) Name contains full weapon name (e.g. "Glorious Energy Rifle")
+				-- handled later with weapon list
+				return nil
+			end
+
+			local function collectAssets()
+				local weaponsFolder = nil
+				local weaponNames = {}
+				local skinsByWeapon = {}
+				local allSkins = {}
+
+				pcall(function()
+					local ps = player:FindFirstChild("PlayerScripts") or player:WaitForChild("PlayerScripts", 5)
+					local assets = ps and ps:FindFirstChild("Assets")
+					if not assets then return end
+					local vm = assets:FindFirstChild("ViewModels")
+					if not vm then return end
+
 					weaponsFolder = vm:FindFirstChild("Weapons")
 					if weaponsFolder then
 						for _, w in ipairs(weaponsFolder:GetChildren()) do
 							table.insert(weaponNames, w.Name)
+							skinsByWeapon[w.Name] = {}
 						end
 						table.sort(weaponNames)
 					end
+
+					local function consider(sk)
+						if not sk or allSkins[sk.Name] then return end
+						if not (sk:IsA("Model") or sk:IsA("Folder") or #sk:GetChildren() > 0) then return end
+						allSkins[sk.Name] = sk
+
+						local weapon = resolveWeaponForSkin(sk)
+						if weapon then
+							-- fuzzy match weapon string to actual weapon folder name
+							local wn = norm(weapon)
+							local placed = false
+							for _, wName in ipairs(weaponNames) do
+								if norm(wName) == wn then
+									table.insert(skinsByWeapon[wName], { name = sk.Name, inst = sk })
+									placed = true
+									break
+								end
+							end
+							if not placed then
+								for _, wName in ipairs(weaponNames) do
+									if norm(wName):find(wn, 1, true) or wn:find(norm(wName), 1, true) then
+										table.insert(skinsByWeapon[wName], { name = sk.Name, inst = sk })
+										placed = true
+										break
+									end
+								end
+							end
+							return
+						end
+
+						-- Name contains entire weapon name (e.g. skin "Glorious Energy Rifle")
+						local sn = norm(sk.Name)
+						for _, wName in ipairs(weaponNames) do
+							local wn = norm(wName)
+							if #wn >= 5 and sn:find(wn, 1, true) then
+								table.insert(skinsByWeapon[wName], { name = sk.Name, inst = sk })
+								return
+							end
+						end
+						-- do NOT dump into other weapons
+					end
+
 					for _, child in ipairs(vm:GetChildren()) do
 						local n = child.Name:lower()
 						if n:find("skin") or n:find("case") then
-							for _, sk in ipairs(child:GetChildren()) do
-								if not skinLookup[sk.Name] then
-									skinLookup[sk.Name] = sk
-									table.insert(skinNames, sk.Name)
-								end
-							end
+							for _, sk in ipairs(child:GetChildren()) do consider(sk) end
 						elseif child.Name ~= "Weapons" and child.Name ~= "FirstPerson" then
-							for _, sk in ipairs(child:GetChildren()) do
-								if not skinLookup[sk.Name] then
-									skinLookup[sk.Name] = sk
-									table.insert(skinNames, sk.Name)
-								end
+							for _, sk in ipairs(child:GetChildren()) do consider(sk) end
+						end
+					end
+					for _, child in ipairs(assets:GetChildren()) do
+						local n = child.Name:lower()
+						if n:find("skin") or n:find("case") then
+							for _, sk in ipairs(child:GetChildren()) do consider(sk) end
+							for _, sub in ipairs(child:GetChildren()) do
+								for _, sk in ipairs(sub:GetChildren()) do consider(sk) end
 							end
 						end
 					end
-					table.sort(skinNames)
-				end
-				wrapsFolder = assets:FindFirstChild("WrapTextures")
-				if wrapsFolder then
-					for _, w in ipairs(wrapsFolder:GetChildren()) do
-						table.insert(wrapNames, w.Name)
-					end
-					table.sort(wrapNames)
-				end
-			end)
 
-			local function mkBtn(y, text)
-				local b = Instance.new("TextButton")
-				b.Size = UDim2.new(1, -16, 0, 24)
-				b.Position = UDim2.fromOffset(8, y)
-				b.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-				b.BorderColor3 = Color3.fromRGB(40, 40, 50)
-				b.BorderSizePixel = 1
-				b.Text = text
-				b.TextColor3 = Color3.fromRGB(180, 180, 195)
-				b.TextSize, b.Font = 11, Enum.Font.Code
-				b.Parent = gSkin
-				return b
+					for _, wName in ipairs(weaponNames) do
+						table.sort(skinsByWeapon[wName], function(a, b) return a.name < b.name end)
+					end
+				end)
+
+				return weaponsFolder, weaponNames, skinsByWeapon, allSkins
 			end
 
-			local weaponBtn = mkBtn(22, #weaponNames > 0 and ("Weapon: " .. weaponNames[1]) or "Weapon: (none)")
-			local skinBtn = mkBtn(52, #skinNames > 0 and ("Skin: " .. skinNames[1]) or "Skin: (none found)")
-			local wrapBtn = mkBtn(82, #wrapNames > 0 and ("Wrap: " .. wrapNames[1]) or "Wrap: (none)")
+			local function replaceSounds(target, skinSrc)
+				if not target or not skinSrc then return end
+				local skinSounds = {}
+				for _, s in ipairs(skinSrc:GetDescendants()) do
+					if s:IsA("Sound") then table.insert(skinSounds, s) end
+				end
+				if #skinSounds == 0 then return end
+				local oldSounds = {}
+				for _, s in ipairs(target:GetDescendants()) do
+					if s:IsA("Sound") then table.insert(oldSounds, s) end
+				end
+				local byName = {}
+				for _, ss in ipairs(skinSounds) do byName[ss.Name:lower()] = ss end
+				for _, osnd in ipairs(oldSounds) do
+					local match = byName[osnd.Name:lower()]
+					if match then
+						osnd.SoundId = match.SoundId
+						pcall(function() osnd.Volume = match.Volume; osnd.PlaybackSpeed = match.PlaybackSpeed end)
+					end
+				end
+				for _, ss in ipairs(skinSounds) do
+					local exists = false
+					for _, osnd in ipairs(oldSounds) do
+						if osnd.Name:lower() == ss.Name:lower() then exists = true break end
+					end
+					if not exists then ss:Clone().Parent = target end
+				end
+			end
 
-			weaponBtn.MouseButton1Click:Connect(function()
-				if #weaponNames == 0 then return end
-				weaponIdx = weaponIdx % #weaponNames + 1
-				weaponBtn.Text = "Weapon: " .. weaponNames[weaponIdx]
-			end)
-			skinBtn.MouseButton1Click:Connect(function()
-				if #skinNames == 0 then return end
-				skinIdx = skinIdx % #skinNames + 1
-				skinBtn.Text = "Skin: " .. skinNames[skinIdx]
-			end)
-			wrapBtn.MouseButton1Click:Connect(function()
-				if #wrapNames == 0 then return end
-				wrapIdx = wrapIdx % #wrapNames + 1
-				wrapBtn.Text = "Wrap: " .. wrapNames[wrapIdx]
-			end)
-
-			local function applySkin()
-				if not weaponsFolder or #weaponNames == 0 or #skinNames == 0 then return end
-				local weapon = weaponsFolder:FindFirstChild(weaponNames[weaponIdx])
-				local skinSrc = skinLookup[skinNames[skinIdx]]
+			local function applySkinToWeapon(weapon, skinSrc)
 				if not weapon or not skinSrc then return end
 				pcall(function()
 					local toRemove = {}
 					for _, c in ipairs(weapon:GetChildren()) do
-						if c:IsA("BasePart") or c:IsA("MeshPart") or c:IsA("Model") or c:IsA("Folder") then
+						if c:IsA("BasePart") or c:IsA("MeshPart") or c:IsA("Model") or c:IsA("Folder")
+							or c:IsA("Sound") or c:IsA("Animation") or c:IsA("AnimationController") then
 							table.insert(toRemove, c)
 						end
 					end
 					for _, c in ipairs(toRemove) do c:Destroy() end
-					for _, c in ipairs(skinSrc:GetChildren()) do
-						c:Clone().Parent = weapon
-					end
+					for _, c in ipairs(skinSrc:GetChildren()) do c:Clone().Parent = weapon end
 				end)
-				print("[Anti-rival] Skin", skinNames[skinIdx], "->", weaponNames[weaponIdx])
-			end
-
-			local function applyWrap()
-				if not weaponsFolder or not wrapsFolder or #weaponNames == 0 or #wrapNames == 0 then return end
-				local weapon = weaponsFolder:FindFirstChild(weaponNames[weaponIdx])
-				local wrapSrc = wrapsFolder:FindFirstChild(wrapNames[wrapIdx])
-				if not weapon or not wrapSrc then return end
+				replaceSounds(weapon, skinSrc)
 				pcall(function()
-					for _, d in ipairs(weapon:GetDescendants()) do
-						if d:IsA("BasePart") and d.Transparency ~= 1 then
-							for _, t in ipairs(d:GetChildren()) do
-								if t:IsA("Texture") or t:IsA("Decal") or t:IsA("SurfaceAppearance") then t:Destroy() end
-							end
-							for _, c in ipairs(wrapSrc:GetChildren()) do
-								if c:IsA("Decal") or c:IsA("Texture") or c:IsA("SurfaceAppearance") then
-									c:Clone().Parent = d
-								end
-							end
+					local function tryTool(tool)
+						if not tool or not tool:IsA("Tool") then return end
+						local wn, tn = norm(weapon.Name), norm(tool.Name)
+						if tn == wn or tn:find(wn, 1, true) or wn:find(tn, 1, true) then
+							replaceSounds(tool, skinSrc)
 						end
 					end
+					local char = player.Character
+					if char then for _, t in ipairs(char:GetChildren()) do tryTool(t) end end
+					local bp = player:FindFirstChild("Backpack")
+					if bp then for _, t in ipairs(bp:GetChildren()) do tryTool(t) end end
 				end)
-				print("[Anti-rival] Wrap", wrapNames[wrapIdx], "->", weaponNames[weaponIdx])
+				pcall(function()
+					local fp = workspace:FindFirstChild("ViewModels")
+					fp = fp and fp:FindFirstChild("FirstPerson")
+					if fp then replaceSounds(fp, skinSrc) end
+				end)
 			end
 
-			local function smallBtn(text, xScale, y, bg, bd, cb)
-				local b = Instance.new("TextButton")
-				b.Size = UDim2.new(0.48, -10, 0, 26)
-				b.Position = UDim2.new(xScale, (xScale > 0) and 2 or 8, 0, y)
-				b.BackgroundColor3 = bg
-				b.BorderColor3 = bd
-				b.BorderSizePixel = 1
-				b.Text = text
-				b.TextColor3 = Color3.fromRGB(100, 180, 255)
-				b.TextSize, b.Font = 11, Enum.Font.Code
-				b.Parent = gSkin
-				b.MouseButton1Click:Connect(cb)
+			local function openSkinMenu()
+				pcall(function()
+					local old = player.PlayerGui:FindFirstChild("AntiRivalSkinMenu")
+					if old then old:Destroy() end
+				end)
+
+				local weaponsFolder, weaponNames, skinsByWeapon, allSkins = collectAssets()
+				if #weaponNames == 0 then
+					statusLbl.Text = "No weapons found"
+					return
+				end
+
+				local screenGui = Instance.new("ScreenGui")
+				screenGui.Name = "AntiRivalSkinMenu"
+				screenGui.ResetOnSpawn = false
+				screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+				screenGui.Parent = player:WaitForChild("PlayerGui")
+
+				local mainWindow = Instance.new("Frame")
+				mainWindow.Size = UDim2.new(0, 240, 0, 350)
+				mainWindow.Position = UDim2.new(0.5, -120, 0.5, -175)
+				mainWindow.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+				mainWindow.Active = true
+				mainWindow.Parent = screenGui
+				local windowCorner = Instance.new("UICorner")
+				windowCorner.CornerRadius = UDim.new(0, 8)
+				windowCorner.Parent = mainWindow
+
+				local titleBar = Instance.new("TextLabel")
+				titleBar.Size = UDim2.new(1, -30, 0, 30)
+				titleBar.Position = UDim2.fromOffset(8, 0)
+				titleBar.BackgroundTransparency = 1
+				titleBar.Text = "Skin Picker"
+				titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+				titleBar.Font = Enum.Font.GothamBold
+				titleBar.TextSize = 14
+				titleBar.TextXAlignment = Enum.TextXAlignment.Left
+				titleBar.Parent = mainWindow
+
+				local closeButton = Instance.new("TextButton")
+				closeButton.Size = UDim2.new(0, 30, 0, 30)
+				closeButton.Position = UDim2.new(1, -30, 0, 0)
+				closeButton.BackgroundTransparency = 1
+				closeButton.Text = "X"
+				closeButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+				closeButton.TextSize = 16
+				closeButton.Font = Enum.Font.GothamBold
+				closeButton.Parent = mainWindow
+				closeButton.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+
+				local weaponIdx = 1
+				local weaponBtn = Instance.new("TextButton")
+				weaponBtn.Size = UDim2.new(1, -16, 0, 26)
+				weaponBtn.Position = UDim2.fromOffset(8, 34)
+				weaponBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+				weaponBtn.BorderSizePixel = 0
+				weaponBtn.Text = "Weapon: " .. weaponNames[1]
+				weaponBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
+				weaponBtn.TextSize = 11
+				weaponBtn.Font = Enum.Font.Code
+				weaponBtn.Parent = mainWindow
+				local wCorner = Instance.new("UICorner")
+				wCorner.CornerRadius = UDim.new(0, 4)
+				wCorner.Parent = weaponBtn
+
+				local countLbl = Instance.new("TextLabel")
+				countLbl.Size = UDim2.new(1, -16, 0, 18)
+				countLbl.Position = UDim2.fromOffset(8, 62)
+				countLbl.BackgroundTransparency = 1
+				countLbl.Text = ""
+				countLbl.TextColor3 = Color3.fromRGB(140, 140, 155)
+				countLbl.TextSize = 10
+				countLbl.Font = Enum.Font.Code
+				countLbl.TextXAlignment = Enum.TextXAlignment.Left
+				countLbl.Parent = mainWindow
+
+				local scrollFrame = Instance.new("ScrollingFrame")
+				scrollFrame.Size = UDim2.new(1, -16, 1, -116)
+				scrollFrame.Position = UDim2.fromOffset(8, 82)
+				scrollFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+				scrollFrame.BorderSizePixel = 0
+				scrollFrame.ScrollBarThickness = 4
+				scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+				scrollFrame.Parent = mainWindow
+				local sCorner = Instance.new("UICorner")
+				sCorner.CornerRadius = UDim.new(0, 4)
+				sCorner.Parent = scrollFrame
+				local listLayout = Instance.new("UIListLayout")
+				listLayout.Padding = UDim.new(0, 4)
+				listLayout.Parent = scrollFrame
+				local pad = Instance.new("UIPadding")
+				pad.PaddingTop = UDim.new(0, 4)
+				pad.PaddingLeft = UDim.new(0, 4)
+				pad.PaddingRight = UDim.new(0, 4)
+				pad.Parent = scrollFrame
+
+				local selectedSkin, selectedBtn = nil, nil
+
+				local function clearList()
+					for _, child in ipairs(scrollFrame:GetChildren()) do
+						if not (child:IsA("UIListLayout") or child:IsA("UIPadding")) then
+							child:Destroy()
+						end
+					end
+					selectedSkin, selectedBtn = nil, nil
+				end
+
+				local function rebuildList()
+					clearList()
+					local wName = weaponNames[weaponIdx]
+					local list = skinsByWeapon[wName] or {}
+					countLbl.Text = ("%d skins for %s"):format(#list, wName)
+					scrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(#list, 1) * 36 + 8)
+					if #list == 0 then
+						local empty = Instance.new("TextLabel")
+						empty.Size = UDim2.new(1, -8, 0, 40)
+						empty.BackgroundTransparency = 1
+						empty.Text = "No skins mapped\nfor this weapon"
+						empty.TextColor3 = Color3.fromRGB(140, 140, 150)
+						empty.TextSize = 11
+						empty.Font = Enum.Font.Code
+						empty.Parent = scrollFrame
+						return
+					end
+					for _, entry in ipairs(list) do
+						local b = Instance.new("TextButton")
+						b.Size = UDim2.new(1, -8, 0, 32)
+						b.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+						b.BorderSizePixel = 0
+						b.Text = "  " .. entry.name
+						b.TextColor3 = Color3.fromRGB(220, 220, 230)
+						b.TextSize = 11
+						b.Font = Enum.Font.Code
+						b.TextXAlignment = Enum.TextXAlignment.Left
+						b.Parent = scrollFrame
+						local bc = Instance.new("UICorner")
+						bc.CornerRadius = UDim.new(0, 4)
+						bc.Parent = b
+						b.MouseButton1Click:Connect(function()
+							if selectedBtn then
+								selectedBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+								selectedBtn.TextColor3 = Color3.fromRGB(220, 220, 230)
+							end
+							selectedSkin = entry.name
+							selectedBtn = b
+							b.BackgroundColor3 = Color3.fromRGB(35, 70, 50)
+							b.TextColor3 = Color3.fromRGB(100, 255, 150)
+						end)
+					end
+				end
+
+				weaponBtn.MouseButton1Click:Connect(function()
+					weaponIdx = weaponIdx % #weaponNames + 1
+					weaponBtn.Text = "Weapon: " .. weaponNames[weaponIdx]
+					rebuildList()
+				end)
+				rebuildList()
+
+				local applyBtn = Instance.new("TextButton")
+				applyBtn.Size = UDim2.new(1, -16, 0, 28)
+				applyBtn.Position = UDim2.new(0, 8, 1, -34)
+				applyBtn.BackgroundColor3 = Color3.fromRGB(25, 55, 40)
+				applyBtn.BorderSizePixel = 0
+				applyBtn.Text = "Apply & Close"
+				applyBtn.TextColor3 = Color3.fromRGB(100, 180, 255)
+				applyBtn.TextSize = 12
+				applyBtn.Font = Enum.Font.Code
+				applyBtn.Parent = mainWindow
+				local aCorner = Instance.new("UICorner")
+				aCorner.CornerRadius = UDim.new(0, 4)
+				aCorner.Parent = applyBtn
+
+				applyBtn.MouseButton1Click:Connect(function()
+					if not selectedSkin then
+						statusLbl.Text = "Pick a skin first"
+						return
+					end
+					local wName = weaponNames[weaponIdx]
+					local weapon = weaponsFolder and weaponsFolder:FindFirstChild(wName)
+					local skinSrc = allSkins[selectedSkin]
+					if not weapon or not skinSrc then
+						statusLbl.Text = "Apply failed"
+						return
+					end
+					applySkinToWeapon(weapon, skinSrc)
+					statusLbl.Text = "Applied: " .. selectedSkin .. " -> " .. wName
+					screenGui:Destroy()
+				end)
+
+				local dragging, dragStart, startPos
+				mainWindow.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = true
+						dragStart = input.Position
+						startPos = mainWindow.Position
+					end
+				end)
+				mainWindow.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = false
+					end
+				end)
+				UserInputService.InputChanged:Connect(function(input)
+					if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+						local delta = input.Position - dragStart
+						mainWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+					end
+				end)
 			end
 
-			smallBtn("Apply Skin", 0, 116, Color3.fromRGB(25, 55, 40), Color3.fromRGB(45, 95, 65), applySkin)
-			smallBtn("Apply Wrap", 0.52, 116, Color3.fromRGB(25, 40, 70), Color3.fromRGB(50, 80, 130), applyWrap)
-			smallBtn("Random Skin", 0, 150, Color3.fromRGB(40, 30, 55), Color3.fromRGB(80, 60, 110), function()
-				if #skinNames == 0 then return end
-				skinIdx = math.random(1, #skinNames)
-				skinBtn.Text = "Skin: " .. skinNames[skinIdx]
-				applySkin()
-			end)
-			smallBtn("Random Wrap", 0.52, 150, Color3.fromRGB(40, 30, 55), Color3.fromRGB(80, 60, 110), function()
-				if #wrapNames == 0 then return end
-				wrapIdx = math.random(1, #wrapNames)
-				wrapBtn.Text = "Wrap: " .. wrapNames[wrapIdx]
-				applyWrap()
-			end)
-
-			local tip = Instance.new("TextLabel")
-			tip.Size = UDim2.new(1, -16, 0, 40)
-			tip.Position = UDim2.fromOffset(8, 186)
-			tip.BackgroundTransparency = 1
-			tip.Text = "Client only. Re-equip gun / respawn after apply.\nSkin = model | Wrap = texture"
-			tip.TextColor3 = Color3.fromRGB(120, 120, 140)
-			tip.TextSize, tip.Font = 10, Enum.Font.Code
-			tip.TextXAlignment = Enum.TextXAlignment.Left
-			tip.TextYAlignment = Enum.TextYAlignment.Top
-			tip.Parent = gSkin
+			openBtn.MouseButton1Click:Connect(openSkinMenu)
 		end
-
-
 
 		-- ============================================================
 		-- SILENT AIM v4 (Utility.Raycast) - dummies + players
@@ -1109,7 +1456,7 @@ local function initMainScript()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.1.18 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.1.19 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -1127,7 +1474,7 @@ local function initMainScript()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.1.18 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.1.19 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -1154,7 +1501,7 @@ local function initMainScript()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.18)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.19)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1374,7 +1721,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.1.18 - discord.gg/6tCjcYUt7"
+		title.Text = "       Anti-rival beta v0.1.19   -   https://discord.gg/3VwzQZDRk               ㅣ RIVALS"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -2819,7 +3166,7 @@ local function initMainScript()
 		noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
 
 		showPage("main")
-		print("Anti-rival beta v0.1.18 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin/Wrap Changer + Triggerbot)")
+		print("Anti-rival beta v0.1.19 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Triggerbot)")
 	end)
 end
 
@@ -2859,7 +3206,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.18)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.19)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
