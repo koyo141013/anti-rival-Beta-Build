@@ -1,4 +1,4 @@
--- [Anti-rival beta v0.1.20 재배포 금지 재배포 시 IP 딸거임]
+-- [Anti-rival beta v0.1.21 재배포 금지 재배포 시 IP 딸거임]
 
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
@@ -450,26 +450,24 @@ local function initMainScript()
 			end
 
 			local function replaceSounds(target, skinSrc)
-				if not target or not skinSrc then return end
+				if not target or not skinSrc then return 0 end
 				local skinSounds = {}
 				for _, s in ipairs(skinSrc:GetDescendants()) do
-					if s:IsA("Sound") then table.insert(skinSounds, s) end
+					if s:IsA("Sound") and type(s.SoundId) == "string" and s.SoundId ~= "" and s.SoundId ~= "rbxassetid://0" then
+						table.insert(skinSounds, s)
+					end
 				end
 				if #skinSounds == 0 then return 0 end
-
-				-- wipe then clone all skin sounds onto target
+				local byName = {}
+				for _, ss in ipairs(skinSounds) do byName[ss.Name:lower()] = ss end
 				for _, s in ipairs(target:GetDescendants()) do
 					if s:IsA("Sound") then
-						local match = nil
-						for _, ss in ipairs(skinSounds) do
-							if ss.Name:lower() == s.Name:lower() then match = ss break end
-						end
-						if match then
+						local match = byName[s.Name:lower()]
+						if match and match.SoundId and match.SoundId ~= "" then
 							s.SoundId = match.SoundId
 							pcall(function()
 								s.Volume = match.Volume
 								s.PlaybackSpeed = match.PlaybackSpeed
-								s.RollOffMode = match.RollOffMode
 							end)
 						end
 					end
@@ -480,8 +478,7 @@ local function initMainScript()
 						if s:IsA("Sound") and s.Name:lower() == ss.Name:lower() then has = true break end
 					end
 					if not has then
-						local cl = ss:Clone()
-						cl.Parent = target
+						pcall(function() ss:Clone().Parent = target end)
 					end
 				end
 				return #skinSounds
@@ -529,29 +526,44 @@ local function initMainScript()
 					if fp then replaceSounds(fp, skinSrc) end
 				end)
 
-				-- Patch SoundIds in loaded modules / heap tables that match old weapon sounds
+				-- Safe sound map for this weapon (no getgc — was breaking Utility.CreateSound)
 				pcall(function()
 					local skinIds = {}
 					for _, s in ipairs(skinSrc:GetDescendants()) do
-						if s:IsA("Sound") and s.SoundId ~= "" then
+						if s:IsA("Sound") and type(s.SoundId) == "string" and s.SoundId ~= "" and s.SoundId ~= "rbxassetid://0" then
 							skinIds[s.Name:lower()] = s.SoundId
 						end
 					end
-					if next(skinIds) == nil then return end
-					for _, v in pairs(getgc(true)) do
-						if type(v) == "table" then
-							local nm = rawget(v, "Name") or rawget(v, "name")
-							if type(nm) == "string" and skinIds[nm:lower()] then
-								if rawget(v, "SoundId") then rawset(v, "SoundId", skinIds[nm:lower()]) end
-								if rawget(v, "Id") and type(rawget(v, "Id")) == "string" and tostring(rawget(v,"Id")):find("rbxasset") then
-									rawset(v, "Id", skinIds[nm:lower()])
-								end
-							end
-						end
+					env._skinSoundMap = env._skinSoundMap or {}
+					env._skinSoundSrc = env._skinSoundSrc or {}
+					env._skinSoundFlat = env._skinSoundFlat or {}
+					env._skinSoundMap[weapon.Name] = skinIds
+					env._skinSoundSrc[weapon.Name] = skinSrc
+					for nm, id in pairs(skinIds) do
+						if id and id ~= "" then env._skinSoundFlat[nm] = id end
 					end
 				end)
 
 				return n1
+			end
+
+
+			if not env._skinSoundHooked then
+				env._skinSoundHooked = true
+				pcall(function()
+					local function watchChar(char)
+						if not char then return end
+						char.ChildAdded:Connect(function(tool)
+							if not tool:IsA("Tool") then return end
+							task.defer(function()
+								local src = env._skinSoundSrc and env._skinSoundSrc[tool.Name]
+								if src then replaceSounds(tool, src) end
+							end)
+						end)
+					end
+					if player.Character then watchChar(player.Character) end
+					player.CharacterAdded:Connect(watchChar)
+				end)
 			end
 
 			local function openSkinMenu()
@@ -1361,7 +1373,12 @@ local function initMainScript()
 		gui.Name = "AntiRival"
 		gui.ResetOnSpawn = false
 		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-		gui.Parent = player:WaitForChild("PlayerGui")
+		gui.DisplayOrder = 50
+		gui.Enabled = true
+		gui.Parent = player:WaitForChild("PlayerGui", 10)
+		if not gui.Parent then
+			warn("[Anti-rival] PlayerGui not found — UI may not show")
+		end
 
 		local keybindGui = Instance.new("ScreenGui")
 		keybindGui.Name = "AntiRivalKeybinds"
@@ -1411,7 +1428,7 @@ local function initMainScript()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.1.20 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.1.21 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -1429,7 +1446,7 @@ local function initMainScript()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.1.20 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.1.21 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -1456,7 +1473,7 @@ local function initMainScript()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.20)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.21)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1676,7 +1693,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.1.20 - discord.gg/6tCjcYUt7"
+		title.Text = "Anti-rival beta v0.1.21 - discord.gg/6tCjcYUt7"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -2103,8 +2120,8 @@ local function initMainScript()
 
 		customShaderButton.Parent = gVis2
 
-		-- Skybox presets
-		local gSky = createGroupBox(visualsPage, "skybox", UDim2.fromOffset(418, 160), UDim2.fromOffset(12, 310))
+		-- Skybox presets (SKY ONLY — Space-style)
+		local gSky = createGroupBox(visualsPage, "skybox", UDim2.fromOffset(418, 70), UDim2.fromOffset(12, 310))
 		local _skyOriginal = nil
 		pcall(function()
 			local existing = Lighting:FindFirstChildOfClass("Sky")
@@ -2113,41 +2130,82 @@ local function initMainScript()
 
 		local skyPresets = {
 			{ name = "Default", sky = nil },
-			{ name = "Aurora", sky = {
-				SkyboxBk = "rbxassetid://149620146", SkyboxDn = "rbxassetid://149620282",
-				SkyboxFt = "rbxassetid://149620360", SkyboxLf = "rbxassetid://149620447",
-				SkyboxRt = "rbxassetid://149620565", SkyboxUp = "rbxassetid://149620630",
-				CelestialBodiesShown = false, StarCount = 3000,
-			}, atmos = { Density = 0.3, Offset = 0.25, Color = Color3.fromRGB(80, 180, 255),
-				Decay = Color3.fromRGB(100, 60, 180), Glare = 0.2, Haze = 1.5 } },
-			{ name = "Night", sky = {
-				SkyboxBk = "rbxassetid://6285719398", SkyboxDn = "rbxassetid://6285720736",
-				SkyboxFt = "rbxassetid://6285721930", SkyboxLf = "rbxassetid://6285723030",
-				SkyboxRt = "rbxassetid://6285724012", SkyboxUp = "rbxassetid://6285725140",
-				CelestialBodiesShown = true, StarCount = 5000, MoonAngularSize = 11,
-			}, atmos = { Density = 0.25, Offset = 0.1, Color = Color3.fromRGB(40, 50, 90),
-				Decay = Color3.fromRGB(20, 20, 40), Glare = 0, Haze = 1.2 } },
+			{ name = "Bright Day", sky = {
+				SkyboxBk="rbxassetid://591058823", SkyboxDn="rbxassetid://591059651", SkyboxFt="rbxassetid://591059128",
+				SkyboxLf="rbxassetid://591059516", SkyboxRt="rbxassetid://591059360", SkyboxUp="rbxassetid://591059882",
+				CelestialBodiesShown=true, StarCount=0 }},
+			{ name = "Cloudy", sky = {
+				SkyboxBk="rbxassetid://1013852", SkyboxDn="rbxassetid://1013853", SkyboxFt="rbxassetid://1013850",
+				SkyboxLf="rbxassetid://1013851", SkyboxRt="rbxassetid://1013849", SkyboxUp="rbxassetid://1013854",
+				CelestialBodiesShown=false, StarCount=0 }},
 			{ name = "Sunset", sky = {
-				SkyboxBk = "rbxassetid://600830446", SkyboxDn = "rbxassetid://600831635",
-				SkyboxFt = "rbxassetid://600832720", SkyboxLf = "rbxassetid://600833862",
-				SkyboxRt = "rbxassetid://600835177", SkyboxUp = "rbxassetid://600835893",
-				CelestialBodiesShown = true, StarCount = 500,
-			}, atmos = { Density = 0.35, Offset = 0.2, Color = Color3.fromRGB(255, 160, 80),
-				Decay = Color3.fromRGB(180, 80, 40), Glare = 0.4, Haze = 2 } },
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=200 }},
+			{ name = "Night Stars", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=5000, MoonAngularSize=12 }},
 			{ name = "Space", sky = {
-				SkyboxBk = "rbxassetid://159454299", SkyboxDn = "rbxassetid://159454296",
-				SkyboxFt = "rbxassetid://159454293", SkyboxLf = "rbxassetid://159454286",
-				SkyboxRt = "rbxassetid://159454300", SkyboxUp = "rbxassetid://159454288",
-				CelestialBodiesShown = false, StarCount = 0,
-			}, atmos = { Density = 0.1, Offset = 0, Color = Color3.fromRGB(20, 20, 40),
-				Decay = Color3.fromRGB(10, 10, 20), Glare = 0, Haze = 0 } },
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Aurora", sky = {
+				SkyboxBk="rbxassetid://149620146", SkyboxDn="rbxassetid://149620282", SkyboxFt="rbxassetid://149620360",
+				SkyboxLf="rbxassetid://149620447", SkyboxRt="rbxassetid://149620565", SkyboxUp="rbxassetid://149620630",
+				CelestialBodiesShown=false, StarCount=3000 }},
 			{ name = "Pink Nebula", sky = {
-				SkyboxBk = "rbxassetid://8139677151", SkyboxDn = "rbxassetid://8139677353",
-				SkyboxFt = "rbxassetid://8139677251", SkyboxLf = "rbxassetid://8139677450",
-				SkyboxRt = "rbxassetid://8139677111", SkyboxUp = "rbxassetid://8139677410",
-				CelestialBodiesShown = false, StarCount = 2000,
-			}, atmos = { Density = 0.28, Offset = 0.15, Color = Color3.fromRGB(255, 140, 200),
-				Decay = Color3.fromRGB(120, 40, 100), Glare = 0.15, Haze = 1.8 } },
+				SkyboxBk="rbxassetid://8139677151", SkyboxDn="rbxassetid://8139677353", SkyboxFt="rbxassetid://8139677251",
+				SkyboxLf="rbxassetid://8139677450", SkyboxRt="rbxassetid://8139677111", SkyboxUp="rbxassetid://8139677410",
+				CelestialBodiesShown=false, StarCount=2000 }},
+			{ name = "Deep Space", sky = {
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Moon Night", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=3000, MoonAngularSize=18 }},
+			{ name = "Starfield", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=10000, MoonAngularSize=5 }},
+			{ name = "Soft Clouds", sky = {
+				SkyboxBk="rbxassetid://1013852", SkyboxDn="rbxassetid://1013853", SkyboxFt="rbxassetid://1013850",
+				SkyboxLf="rbxassetid://1013851", SkyboxRt="rbxassetid://1013849", SkyboxUp="rbxassetid://1013854",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Horizon Glow", sky = {
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=100 }},
+			{ name = "Clear Day", sky = {
+				SkyboxBk="rbxassetid://591058823", SkyboxDn="rbxassetid://591059651", SkyboxFt="rbxassetid://591059128",
+				SkyboxLf="rbxassetid://591059516", SkyboxRt="rbxassetid://591059360", SkyboxUp="rbxassetid://591059882",
+				CelestialBodiesShown=true, StarCount=0 }},
+			{ name = "Twilight", sky = {
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=1200 }},
+			{ name = "Northern Lights", sky = {
+				SkyboxBk="rbxassetid://149620146", SkyboxDn="rbxassetid://149620282", SkyboxFt="rbxassetid://149620360",
+				SkyboxLf="rbxassetid://149620447", SkyboxRt="rbxassetid://149620565", SkyboxUp="rbxassetid://149620630",
+				CelestialBodiesShown=false, StarCount=3500 }},
+			{ name = "Galaxy Pink", sky = {
+				SkyboxBk="rbxassetid://8139677151", SkyboxDn="rbxassetid://8139677353", SkyboxFt="rbxassetid://8139677251",
+				SkyboxLf="rbxassetid://8139677450", SkyboxRt="rbxassetid://8139677111", SkyboxUp="rbxassetid://8139677410",
+				CelestialBodiesShown=false, StarCount=3000 }},
+			{ name = "Void", sky = {
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Evening", sky = {
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=500 }},
+			{ name = "Midnight", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=6000, MoonAngularSize=15 }},
 		}
 
 		local function applySkyPreset(preset)
@@ -2156,80 +2214,136 @@ local function initMainScript()
 					if s:IsA("Sky") then s:Destroy() end
 				end
 				if not preset.sky then
-					if _skyOriginal then
-						_skyOriginal:Clone().Parent = Lighting
-					end
-					local atmos = Lighting:FindFirstChildOfClass("Atmosphere")
-					if atmos then
-						atmos.Density = 0.3
-						atmos.Offset = 0.25
-						atmos.Color = Color3.fromRGB(199, 199, 199)
-						atmos.Decay = Color3.fromRGB(92, 92, 100)
-						atmos.Glare = 0
-						atmos.Haze = 0
-					end
+					if _skyOriginal then _skyOriginal:Clone().Parent = Lighting end
 					return
 				end
 				local sky = Instance.new("Sky")
 				sky.Name = "AntiRivalSky"
 				for k, v in pairs(preset.sky) do
-					pcall(function() sky[k] = v end)
+					if v ~= nil and v ~= "" then
+						pcall(function() sky[k] = v end)
+					end
 				end
 				sky.Parent = Lighting
-				if preset.atmos then
-					local atmos = Lighting:FindFirstChildOfClass("Atmosphere")
-					if not atmos then
-						atmos = Instance.new("Atmosphere")
-						atmos.Parent = Lighting
-					end
-					for k, v in pairs(preset.atmos) do
-						pcall(function() atmos[k] = v end)
-					end
+			end)
+		end
+
+		local function openSkyMenu()
+			pcall(function()
+				local old = player.PlayerGui:FindFirstChild("AntiRivalSkyMenu")
+				if old then old:Destroy() end
+			end)
+			local screenGui = Instance.new("ScreenGui")
+			screenGui.Name = "AntiRivalSkyMenu"
+			screenGui.ResetOnSpawn = false
+			screenGui.DisplayOrder = 100
+			screenGui.Parent = player:WaitForChild("PlayerGui")
+
+			local mainWindow = Instance.new("Frame")
+			mainWindow.Size = UDim2.new(0, 240, 0, 350)
+			mainWindow.Position = UDim2.new(0.8, -250, 0.5, -175)
+			mainWindow.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+			mainWindow.Active = true
+			mainWindow.Parent = screenGui
+			Instance.new("UICorner", mainWindow).CornerRadius = UDim.new(0, 8)
+
+			local titleBar = Instance.new("TextLabel")
+			titleBar.Size = UDim2.new(1, -30, 0, 30)
+			titleBar.Position = UDim2.fromOffset(8, 0)
+			titleBar.BackgroundTransparency = 1
+			titleBar.Text = "Skybox Picker (sky only)"
+			titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+			titleBar.Font = Enum.Font.GothamBold
+			titleBar.TextSize = 13
+			titleBar.TextXAlignment = Enum.TextXAlignment.Left
+			titleBar.Parent = mainWindow
+
+			local closeButton = Instance.new("TextButton")
+			closeButton.Size = UDim2.new(0, 30, 0, 30)
+			closeButton.Position = UDim2.new(1, -30, 0, 0)
+			closeButton.BackgroundTransparency = 1
+			closeButton.Text = "X"
+			closeButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+			closeButton.TextSize = 16
+			closeButton.Font = Enum.Font.GothamBold
+			closeButton.Parent = mainWindow
+			closeButton.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+
+			local scrollFrame = Instance.new("ScrollingFrame")
+			scrollFrame.Size = UDim2.new(1, -16, 1, -40)
+			scrollFrame.Position = UDim2.fromOffset(8, 34)
+			scrollFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+			scrollFrame.BorderSizePixel = 0
+			scrollFrame.ScrollBarThickness = 4
+			scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #skyPresets * 42 + 8)
+			scrollFrame.Parent = mainWindow
+			Instance.new("UICorner", scrollFrame).CornerRadius = UDim.new(0, 4)
+			local listLayout = Instance.new("UIListLayout")
+			listLayout.Padding = UDim.new(0, 4)
+			listLayout.Parent = scrollFrame
+			local pad = Instance.new("UIPadding")
+			pad.PaddingTop = UDim.new(0, 4)
+			pad.PaddingLeft = UDim.new(0, 4)
+			pad.PaddingRight = UDim.new(0, 4)
+			pad.Parent = scrollFrame
+
+			for _, preset in ipairs(skyPresets) do
+				local b = Instance.new("TextButton")
+				b.Size = UDim2.new(1, -8, 0, 36)
+				b.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+				b.BorderSizePixel = 0
+				b.Text = "  " .. preset.name
+				b.TextColor3 = Color3.fromRGB(220, 220, 230)
+				b.TextSize = 12
+				b.Font = Enum.Font.Code
+				b.TextXAlignment = Enum.TextXAlignment.Left
+				b.Parent = scrollFrame
+				Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+				b.MouseButton1Click:Connect(function()
+					applySkyPreset(preset)
+					b.BackgroundColor3 = Color3.fromRGB(35, 70, 50)
+					b.TextColor3 = Color3.fromRGB(100, 255, 150)
+					task.delay(0.35, function()
+						if b and b.Parent then
+							b.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+							b.TextColor3 = Color3.fromRGB(220, 220, 230)
+						end
+					end)
+				end)
+			end
+
+			local dragging, dragStart, startPos
+			mainWindow.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = true; dragStart = input.Position; startPos = mainWindow.Position
+				end
+			end)
+			mainWindow.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = false
+				end
+			end)
+			UserInputService.InputChanged:Connect(function(input)
+				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+					local d = input.Position - dragStart
+					mainWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 				end
 			end)
 		end
 
-		local skyIdx = 1
-		local skyBtn = Instance.new("TextButton")
-		skyBtn.Size = UDim2.new(1, -16, 0, 28)
-		skyBtn.Position = UDim2.fromOffset(8, 22)
-		skyBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-		skyBtn.BorderColor3 = Color3.fromRGB(40, 40, 50)
-		skyBtn.BorderSizePixel = 1
-		skyBtn.Text = "Sky: " .. skyPresets[1].name
-		skyBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
-		skyBtn.TextSize, skyBtn.Font = 11, Enum.Font.Code
-		skyBtn.Parent = gSky
-		skyBtn.MouseButton1Click:Connect(function()
-			skyIdx = skyIdx % #skyPresets + 1
-			skyBtn.Text = "Sky: " .. skyPresets[skyIdx].name
+		local skyMenuBtn = Instance.new("TextButton")
+		skyMenuBtn.Size = UDim2.new(1, -16, 0, 32)
+		skyMenuBtn.Position = UDim2.fromOffset(8, 22)
+		skyMenuBtn.BackgroundColor3 = Color3.fromRGB(25, 40, 70)
+		skyMenuBtn.BorderColor3 = Color3.fromRGB(50, 80, 130)
+		skyMenuBtn.BorderSizePixel = 1
+		skyMenuBtn.Text = "OPEN SKYBOX MENU"
+		skyMenuBtn.TextColor3 = Color3.fromRGB(100, 180, 255)
+		skyMenuBtn.TextSize, skyMenuBtn.Font = 12, Enum.Font.Code
+		skyMenuBtn.Parent = gSky
+		skyMenuBtn.MouseButton1Click:Connect(function()
+			pcall(openSkyMenu)
 		end)
-
-		local skyApply = Instance.new("TextButton")
-		skyApply.Size = UDim2.new(1, -16, 0, 28)
-		skyApply.Position = UDim2.fromOffset(8, 56)
-		skyApply.BackgroundColor3 = Color3.fromRGB(25, 55, 40)
-		skyApply.BorderColor3 = Color3.fromRGB(45, 95, 65)
-		skyApply.BorderSizePixel = 1
-		skyApply.Text = "Apply Skybox"
-		skyApply.TextColor3 = Color3.fromRGB(100, 180, 255)
-		skyApply.TextSize, skyApply.Font = 11, Enum.Font.Code
-		skyApply.Parent = gSky
-		skyApply.MouseButton1Click:Connect(function()
-			applySkyPreset(skyPresets[skyIdx])
-		end)
-
-		local skyTip = Instance.new("TextLabel")
-		skyTip.Size = UDim2.new(1, -16, 0, 40)
-		skyTip.Position = UDim2.fromOffset(8, 92)
-		skyTip.BackgroundTransparency = 1
-		skyTip.Text = "Default / Aurora / Night / Sunset / Space / Pink Nebula\nClient-side only"
-		skyTip.TextColor3 = Color3.fromRGB(120, 120, 140)
-		skyTip.TextSize, skyTip.Font = 10, Enum.Font.Code
-		skyTip.TextXAlignment = Enum.TextXAlignment.Left
-		skyTip.TextYAlignment = Enum.TextYAlignment.Top
-		skyTip.Parent = gSky
-
 
 		-- 쉐이더 효과 전역 상태 (창을 닫아도 유지)
 		local shaderState = {
@@ -2346,21 +2460,31 @@ local function initMainScript()
 
 		local function launchCustomShader()
 			-- 이미 메뉴가 열려있으면 무시
-			if player.PlayerGui:FindFirstChild("ShaderMenuGui") then
+			local pg = player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 5)
+			if not pg then
+				warn("[Anti-rival] PlayerGui missing")
+				return
+			end
+			if pg:FindFirstChild("ShaderMenuGui") then
 				return
 			end
 
-			ensureShaderEffects()
+			local okEnsure, errEnsure = pcall(ensureShaderEffects)
+			if not okEnsure then
+				warn("[Anti-rival] ensureShaderEffects:", errEnsure)
+			end
 
-			UserInputService.MouseIconEnabled = true
-			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			pcall(function()
+				UserInputService.MouseIconEnabled = true
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end)
 
-			local colorEffect = shaderState.colorEffect
-			local blurEffect = shaderState.blurEffect
-			local bloomEffect = shaderState.bloomEffect
-			local snowEmitter = shaderState.snowEmitter
-			local auroraEmitter = shaderState.auroraEmitter
-			local originalClockTime = shaderState.originalClockTime
+			local colorEffect = shaderState and shaderState.colorEffect
+			local blurEffect = shaderState and shaderState.blurEffect
+			local bloomEffect = shaderState and shaderState.bloomEffect
+			local snowEmitter = shaderState and shaderState.snowEmitter
+			local auroraEmitter = shaderState and shaderState.auroraEmitter
+			local originalClockTime = shaderState and shaderState.originalClockTime
 
 			local shaderPresets = {
 				{ Name = "원본 (OFF)", Color = {Enabled = false}, Blur = {Enabled = false}, Bloom = {Enabled = false} },
@@ -2379,6 +2503,9 @@ local function initMainScript()
 			local screenGui = Instance.new("ScreenGui")
 			screenGui.Name = "ShaderMenuGui"
 			screenGui.ResetOnSpawn = false
+			screenGui.DisplayOrder = 100
+			screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+			screenGui.DisplayOrder = 100
 			screenGui.Parent = player:WaitForChild("PlayerGui")
 
 			local modalBg = Instance.new("TextButton")
@@ -2527,7 +2654,8 @@ local function initMainScript()
 		end
 
 		customShaderButton.MouseButton1Click:Connect(function()
-			launchCustomShader()
+			local ok, err = pcall(launchCustomShader)
+			if not ok then warn("[Anti-rival] Shader menu error:", err) end
 		end)
 
 		local gChar1 = createGroupBox(characterPage, "character capability", UDim2.fromOffset(418, 120), UDim2.fromOffset(12, 12))
@@ -3249,8 +3377,9 @@ local function initMainScript()
 		teleporterButton.MouseButton1Click:Connect(function() S.teleporterOn = not S.teleporterOn; setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)") end)
 		noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
 
-		showPage("main")
-		print("Anti-rival beta v0.1.20 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Skybox + Triggerbot)")
+		pcall(function() showPage("main") end)
+		if gui then gui.Enabled = true end
+		print("Anti-rival beta v0.1.21 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Skybox + Triggerbot)")
 	end)
 end
 
@@ -3290,7 +3419,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.20)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.21)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
