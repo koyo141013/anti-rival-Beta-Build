@@ -1,4 +1,4 @@
--- [Anti-rival beta v0.1.21 재배포 금지 재배포 시 IP 딸거임]
+-- [Anti-rival beta v0.2.1.0 재배포 금지 재배포 시 IP 딸거임]
 
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
@@ -101,6 +101,7 @@ local function initMainScript()
 			godModeOn = false, orbitOn = false, voidSpanOn = false, infiniteJumpOn = false,
 			forceThirdPersonOn = false, teleporterOn = false, lastTeleportTick = 0, teleportDistance = 50000,
 			walkSpeed = 16, fightSpeed = 50, showKeybindsOn = true, showWatermarkOn = true,
+			autoLoad = false,
 		}
 		
 		local selectedTargets = {}
@@ -1289,58 +1290,173 @@ local function initMainScript()
 		}
 		local listeningKey = nil
 
-		local CONFIG_FILE_NAME_PREFS = "AntiRival_Config.json"
+		local CONFIG_DIR = "AntiRival_Configs"
+		local CONFIG_FILE_NAME_PREFS = CONFIG_DIR .. "/default.json"
+		local HttpService = game:GetService("HttpService")
 
-		local function SaveConfig()
-			if writefile then
-				local configData = {
-					walkSpeed = S.walkSpeed,
-					fightSpeed = S.fightSpeed,
-					teleportDistance = S.teleportDistance,
-					showKeybindsOn = S.showKeybindsOn,
-					showWatermarkOn = S.showWatermarkOn,
-					keybinds = {
-						randomTp = tostring(keybinds.randomTp.Name),
-						autoTp = tostring(keybinds.autoTp.Name),
-						orbit = tostring(keybinds.orbit.Name),
-						fight = tostring(keybinds.fight.Name),
-						noclip = tostring(keybinds.noclip.Name),
-						esp = tostring(keybinds.esp.Name)
-					}
-				}
-				local success, encoded = pcall(function()
-					return game:GetService("HttpService"):JSONEncode(configData)
-				end)
-				if success then
-					writefile(CONFIG_FILE_NAME_PREFS, encoded)
+		local function ensureConfigDir()
+			pcall(function()
+				if type(makefolder) == "function" then
+					if type(isfolder) == "function" then
+						if not isfolder(CONFIG_DIR) then makefolder(CONFIG_DIR) end
+					else
+						makefolder(CONFIG_DIR)
+					end
 				end
-			end
+			end)
 		end
 
-		local function LoadConfig()
-			if isfile and isfile(CONFIG_FILE_NAME_PREFS) then
-				local success, decoded = pcall(function()
-					return game:GetService("HttpService"):JSONDecode(readfile(CONFIG_FILE_NAME_PREFS))
-				end)
-				if success and type(decoded) == "table" then
-					if decoded.walkSpeed then S.walkSpeed = decoded.walkSpeed end
-					if decoded.fightSpeed then S.fightSpeed = decoded.fightSpeed end
-					if decoded.teleportDistance then S.teleportDistance = decoded.teleportDistance end
-					if decoded.showKeybindsOn ~= nil then S.showKeybindsOn = decoded.showKeybindsOn end
-					if decoded.showWatermarkOn ~= nil then S.showWatermarkOn = decoded.showWatermarkOn end
+		local function sanitizeConfigName(name)
+			name = tostring(name or "default"):gsub("[^%w%-%_]", "_")
+			if name == "" then name = "default" end
+			return name
+		end
 
-					if decoded.keybinds then
-						for k, v in pairs(decoded.keybinds) do
-							if Enum.KeyCode[v] then
-								keybinds[k] = Enum.KeyCode[v]
-							end
-						end
+		local function configPath(name)
+			return CONFIG_DIR .. "/" .. sanitizeConfigName(name) .. ".json"
+		end
+
+		local function buildConfigData()
+			local kb = {}
+			for k, v in pairs(keybinds) do
+				if typeof(v) == "EnumItem" then
+					kb[k] = v.Name
+				elseif type(v) == "string" then
+					kb[k] = v
+				end
+			end
+			return {
+				walkSpeed = S.walkSpeed,
+				fightSpeed = S.fightSpeed,
+				teleportDistance = S.teleportDistance,
+				silentAimFOV = S.silentAimFOV,
+				silentAimTargetMode = S.silentAimTargetMode,
+				silentAimHitPart = S.silentAimHitPart,
+				showKeybindsOn = S.showKeybindsOn,
+				showWatermarkOn = S.showWatermarkOn,
+				keybinds = kb,
+				toggles = {
+					walkOn = S.walkOn,
+					fightOn = S.fightOn,
+					espOn = S.espOn,
+					namesOn = S.namesOn,
+					healthOn = S.healthOn,
+					noclipOn = S.noclipOn,
+					aimbotOn = S.aimbotOn,
+					silentAimOn = S.silentAimOn,
+					ragebotOn = S.ragebotOn,
+					auraOn = S.auraOn,
+					triggerBotOn = S.triggerBotOn,
+					wallbangOn = S.wallbangOn,
+					godModeOn = S.godModeOn,
+					orbitOn = S.orbitOn,
+					voidSpanOn = S.voidSpanOn,
+					infiniteJumpOn = S.infiniteJumpOn,
+					forceThirdPersonOn = S.forceThirdPersonOn,
+					teleporterOn = S.teleporterOn,
+					showKeybindsOn = S.showKeybindsOn,
+					showWatermarkOn = S.showWatermarkOn,
+					rapidFire = env._rivRapidFire and true or false,
+					noRecoil = env._rivNoRecoil and true or false,
+				},
+				autoLoad = S.autoLoad and true or false,
+			}
+		end
+
+		local function applyConfigData(decoded)
+			if type(decoded) ~= "table" then return false end
+			if decoded.walkSpeed then S.walkSpeed = decoded.walkSpeed end
+			if decoded.fightSpeed then S.fightSpeed = decoded.fightSpeed end
+			if decoded.teleportDistance then S.teleportDistance = decoded.teleportDistance end
+			if decoded.silentAimFOV then S.silentAimFOV = decoded.silentAimFOV end
+			if decoded.silentAimTargetMode then S.silentAimTargetMode = decoded.silentAimTargetMode end
+			if decoded.silentAimHitPart then S.silentAimHitPart = decoded.silentAimHitPart end
+			if decoded.showKeybindsOn ~= nil then S.showKeybindsOn = decoded.showKeybindsOn end
+			if decoded.showWatermarkOn ~= nil then S.showWatermarkOn = decoded.showWatermarkOn end
+			if decoded.autoLoad ~= nil then S.autoLoad = decoded.autoLoad and true or false end
+			if decoded.keybinds then
+				for k, v in pairs(decoded.keybinds) do
+					if type(v) == "string" and Enum.KeyCode[v] then
+						keybinds[k] = Enum.KeyCode[v]
+					elseif type(v) == "string" and v == "Unknown" then
+						keybinds[k] = Enum.KeyCode.Unknown
 					end
 				end
 			end
+			if type(decoded.toggles) == "table" then
+				local t = decoded.toggles
+				for _, key in ipairs({
+					"walkOn","fightOn","espOn","namesOn","healthOn","noclipOn","aimbotOn","silentAimOn",
+					"ragebotOn","auraOn","triggerBotOn","wallbangOn","godModeOn","orbitOn","voidSpanOn",
+					"infiniteJumpOn","forceThirdPersonOn","teleporterOn","showKeybindsOn","showWatermarkOn"
+				}) do
+					if t[key] ~= nil then S[key] = t[key] and true or false end
+				end
+				if t.rapidFire ~= nil then env._rivRapidFire = t.rapidFire and true or false end
+				if t.noRecoil ~= nil then env._rivNoRecoil = t.noRecoil and true or false end
+			end
+			-- UI refresh (defined after buttons exist)
+			if type(env._antiRivalRefreshUI) == "function" then
+				pcall(env._antiRivalRefreshUI)
+			end
+			return true
 		end
 
-		LoadConfig()
+		local function SaveConfig(name)
+			if type(writefile) ~= "function" then return false, "writefile unavailable" end
+			ensureConfigDir()
+			name = sanitizeConfigName(name or "default")
+			local configData = buildConfigData()
+			local success, encoded = pcall(function()
+				return HttpService:JSONEncode(configData)
+			end)
+			if not success then return false, encoded end
+			local ok, err = pcall(function()
+				writefile(configPath(name), encoded)
+			end)
+			return ok, err
+		end
+
+		local function LoadConfig(name)
+			if type(readfile) ~= "function" or type(isfile) ~= "function" then return false end
+			ensureConfigDir()
+			name = sanitizeConfigName(name or "default")
+			local path = configPath(name)
+			if not isfile(path) then
+				-- migrate legacy single-file config
+				if isfile("AntiRival_Config.json") then
+					path = "AntiRival_Config.json"
+				else
+					return false
+				end
+			end
+			local success, decoded = pcall(function()
+				return HttpService:JSONDecode(readfile(path))
+			end)
+			if success and type(decoded) == "table" then
+				return applyConfigData(decoded)
+			end
+			return false
+		end
+
+		local function ListConfigs()
+			local list = {}
+			ensureConfigDir()
+			pcall(function()
+				if type(listfiles) == "function" then
+					for _, f in ipairs(listfiles(CONFIG_DIR)) do
+						local s = tostring(f)
+						s = s:gsub(string.char(92), "/")
+						local base = s:match("([^/]+)%.json$")
+						if base then table.insert(list, base) end
+					end
+				end
+			end)
+			table.sort(list)
+			return list
+		end
+
+		LoadConfig("default")
 
 		local function getActiveCamera()
 			return Workspace.CurrentCamera or Workspace:FindFirstChildOfClass("Camera")
@@ -1361,9 +1477,7 @@ local function initMainScript()
 			button.BorderColor3 = enabled and Color3.fromRGB(80, 160, 110) or Color3.fromRGB(40, 40, 50)
 		end
 
-		local toggleFight = nil
-		local toggleNoclip = nil
-		local toggleEsp = nil
+		local togglesRef = { fight = nil, noclip = nil, esp = nil }
 
 		local gamma = Lighting:FindFirstChild("AntiRivalGamma") or Instance.new("ColorCorrectionEffect")
 		gamma.Name = "AntiRivalGamma"
@@ -1428,7 +1542,7 @@ local function initMainScript()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.1.21 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.2.1.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -1446,7 +1560,7 @@ local function initMainScript()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.1.21 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.2.1.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -1473,7 +1587,7 @@ local function initMainScript()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.1.21)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.1.0)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1693,7 +1807,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.1.21 - discord.gg/6tCjcYUt7"
+		title.Text = "Anti-rival beta v0.2.1.0 - discord.gg/6tCjcYUt7"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -2120,7 +2234,7 @@ local function initMainScript()
 
 		customShaderButton.Parent = gVis2
 
-		-- Skybox presets (SKY ONLY — Space-style)
+		-- Skybox presets (SKY ONLY — proven texture sets only)
 		local gSky = createGroupBox(visualsPage, "skybox", UDim2.fromOffset(418, 70), UDim2.fromOffset(12, 310))
 		local _skyOriginal = nil
 		pcall(function()
@@ -2128,9 +2242,18 @@ local function initMainScript()
 			if existing then _skyOriginal = existing:Clone() end
 		end)
 
+		-- Only use skybox IDs known to load in Roblox (Space-style = Sky instance only)
 		local skyPresets = {
 			{ name = "Default", sky = nil },
+			{ name = "Space", sky = {
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
 			{ name = "Bright Day", sky = {
+				SkyboxBk="rbxassetid://591058823", SkyboxDn="rbxassetid://591059651", SkyboxFt="rbxassetid://591059128",
+				SkyboxLf="rbxassetid://591059516", SkyboxRt="rbxassetid://591059360", SkyboxUp="rbxassetid://591059882",
+				CelestialBodiesShown=true, StarCount=0 }},
+			{ name = "Clear Blue", sky = {
 				SkyboxBk="rbxassetid://591058823", SkyboxDn="rbxassetid://591059651", SkyboxFt="rbxassetid://591059128",
 				SkyboxLf="rbxassetid://591059516", SkyboxRt="rbxassetid://591059360", SkyboxUp="rbxassetid://591059882",
 				CelestialBodiesShown=true, StarCount=0 }},
@@ -2138,74 +2261,67 @@ local function initMainScript()
 				SkyboxBk="rbxassetid://1013852", SkyboxDn="rbxassetid://1013853", SkyboxFt="rbxassetid://1013850",
 				SkyboxLf="rbxassetid://1013851", SkyboxRt="rbxassetid://1013849", SkyboxUp="rbxassetid://1013854",
 				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Overcast", sky = {
+				SkyboxBk="rbxassetid://1013852", SkyboxDn="rbxassetid://1013853", SkyboxFt="rbxassetid://1013850",
+				SkyboxLf="rbxassetid://1013851", SkyboxRt="rbxassetid://1013849", SkyboxUp="rbxassetid://1013854",
+				CelestialBodiesShown=false, StarCount=0 }},
 			{ name = "Sunset", sky = {
 				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
 				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
 				CelestialBodiesShown=true, StarCount=200 }},
-			{ name = "Night Stars", sky = {
-				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
-				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
-				CelestialBodiesShown=true, StarCount=5000, MoonAngularSize=12 }},
-			{ name = "Space", sky = {
-				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
-				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
-				CelestialBodiesShown=false, StarCount=0 }},
-			{ name = "Aurora", sky = {
-				SkyboxBk="rbxassetid://149620146", SkyboxDn="rbxassetid://149620282", SkyboxFt="rbxassetid://149620360",
-				SkyboxLf="rbxassetid://149620447", SkyboxRt="rbxassetid://149620565", SkyboxUp="rbxassetid://149620630",
-				CelestialBodiesShown=false, StarCount=3000 }},
-			{ name = "Pink Nebula", sky = {
-				SkyboxBk="rbxassetid://8139677151", SkyboxDn="rbxassetid://8139677353", SkyboxFt="rbxassetid://8139677251",
-				SkyboxLf="rbxassetid://8139677450", SkyboxRt="rbxassetid://8139677111", SkyboxUp="rbxassetid://8139677410",
-				CelestialBodiesShown=false, StarCount=2000 }},
-			{ name = "Deep Space", sky = {
-				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
-				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
-				CelestialBodiesShown=false, StarCount=0 }},
-			{ name = "Moon Night", sky = {
-				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
-				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
-				CelestialBodiesShown=true, StarCount=3000, MoonAngularSize=18 }},
-			{ name = "Starfield", sky = {
-				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
-				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
-				CelestialBodiesShown=true, StarCount=10000, MoonAngularSize=5 }},
-			{ name = "Soft Clouds", sky = {
-				SkyboxBk="rbxassetid://1013852", SkyboxDn="rbxassetid://1013853", SkyboxFt="rbxassetid://1013850",
-				SkyboxLf="rbxassetid://1013851", SkyboxRt="rbxassetid://1013849", SkyboxUp="rbxassetid://1013854",
-				CelestialBodiesShown=false, StarCount=0 }},
-			{ name = "Horizon Glow", sky = {
-				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
-				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
-				CelestialBodiesShown=true, StarCount=100 }},
-			{ name = "Clear Day", sky = {
-				SkyboxBk="rbxassetid://591058823", SkyboxDn="rbxassetid://591059651", SkyboxFt="rbxassetid://591059128",
-				SkyboxLf="rbxassetid://591059516", SkyboxRt="rbxassetid://591059360", SkyboxUp="rbxassetid://591059882",
-				CelestialBodiesShown=true, StarCount=0 }},
-			{ name = "Twilight", sky = {
-				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
-				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
-				CelestialBodiesShown=true, StarCount=1200 }},
-			{ name = "Northern Lights", sky = {
-				SkyboxBk="rbxassetid://149620146", SkyboxDn="rbxassetid://149620282", SkyboxFt="rbxassetid://149620360",
-				SkyboxLf="rbxassetid://149620447", SkyboxRt="rbxassetid://149620565", SkyboxUp="rbxassetid://149620630",
-				CelestialBodiesShown=false, StarCount=3500 }},
-			{ name = "Galaxy Pink", sky = {
-				SkyboxBk="rbxassetid://8139677151", SkyboxDn="rbxassetid://8139677353", SkyboxFt="rbxassetid://8139677251",
-				SkyboxLf="rbxassetid://8139677450", SkyboxRt="rbxassetid://8139677111", SkyboxUp="rbxassetid://8139677410",
-				CelestialBodiesShown=false, StarCount=3000 }},
-			{ name = "Void", sky = {
-				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
-				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
-				CelestialBodiesShown=false, StarCount=0 }},
 			{ name = "Evening", sky = {
 				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
 				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
 				CelestialBodiesShown=true, StarCount=500 }},
+			{ name = "Twilight", sky = {
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=1200 }},
+			{ name = "Night Stars", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=5000, MoonAngularSize=12 }},
 			{ name = "Midnight", sky = {
 				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
 				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
-				CelestialBodiesShown=true, StarCount=6000, MoonAngularSize=15 }},
+				CelestialBodiesShown=true, StarCount=8000, MoonAngularSize=15 }},
+			{ name = "Starfield", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=10000, MoonAngularSize=5 }},
+			{ name = "Moon Night", sky = {
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=true, StarCount=3000, MoonAngularSize=20 }},
+			{ name = "Aurora", sky = {
+				-- uses night base (loads reliably); high stars for aurora-ish look
+				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
+				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
+				CelestialBodiesShown=false, StarCount=7000 }},
+			{ name = "Deep Space", sky = {
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Void", sky = {
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Cosmos", sky = {
+				SkyboxBk="rbxassetid://159454299", SkyboxDn="rbxassetid://159454296", SkyboxFt="rbxassetid://159454293",
+				SkyboxLf="rbxassetid://159454286", SkyboxRt="rbxassetid://159454300", SkyboxUp="rbxassetid://159454288",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Soft Clouds", sky = {
+				SkyboxBk="rbxassetid://1013852", SkyboxDn="rbxassetid://1013853", SkyboxFt="rbxassetid://1013850",
+				SkyboxLf="rbxassetid://1013851", SkyboxRt="rbxassetid://1013849", SkyboxUp="rbxassetid://1013854",
+				CelestialBodiesShown=false, StarCount=0 }},
+			{ name = "Golden Hour", sky = {
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=100 }},
+			{ name = "Dusk", sky = {
+				SkyboxBk="rbxassetid://600830446", SkyboxDn="rbxassetid://600831635", SkyboxFt="rbxassetid://600832720",
+				SkyboxLf="rbxassetid://600833862", SkyboxRt="rbxassetid://600835177", SkyboxUp="rbxassetid://600835893",
+				CelestialBodiesShown=true, StarCount=800 }},
 		}
 
 		local function applySkyPreset(preset)
@@ -2213,8 +2329,10 @@ local function initMainScript()
 				for _, s in ipairs(Lighting:GetChildren()) do
 					if s:IsA("Sky") then s:Destroy() end
 				end
-				if not preset.sky then
-					if _skyOriginal then _skyOriginal:Clone().Parent = Lighting end
+				if not preset or not preset.sky then
+					if _skyOriginal then
+						_skyOriginal:Clone().Parent = Lighting
+					end
 					return
 				end
 				local sky = Instance.new("Sky")
@@ -2251,7 +2369,7 @@ local function initMainScript()
 			titleBar.Size = UDim2.new(1, -30, 0, 30)
 			titleBar.Position = UDim2.fromOffset(8, 0)
 			titleBar.BackgroundTransparency = 1
-			titleBar.Text = "Skybox Picker (sky only)"
+			titleBar.Text = "Skybox (sky only)"
 			titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
 			titleBar.Font = Enum.Font.GothamBold
 			titleBar.TextSize = 13
@@ -2287,6 +2405,7 @@ local function initMainScript()
 			pad.PaddingRight = UDim.new(0, 4)
 			pad.Parent = scrollFrame
 
+			local selectedBtn = nil
 			for _, preset in ipairs(skyPresets) do
 				local b = Instance.new("TextButton")
 				b.Size = UDim2.new(1, -8, 0, 36)
@@ -2301,14 +2420,13 @@ local function initMainScript()
 				Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
 				b.MouseButton1Click:Connect(function()
 					applySkyPreset(preset)
+					if selectedBtn and selectedBtn.Parent then
+						selectedBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+						selectedBtn.TextColor3 = Color3.fromRGB(220, 220, 230)
+					end
+					selectedBtn = b
 					b.BackgroundColor3 = Color3.fromRGB(35, 70, 50)
 					b.TextColor3 = Color3.fromRGB(100, 255, 150)
-					task.delay(0.35, function()
-						if b and b.Parent then
-							b.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-							b.TextColor3 = Color3.fromRGB(220, 220, 230)
-						end
-					end)
 				end)
 			end
 
@@ -2717,7 +2835,7 @@ local function initMainScript()
 
 		pcall(function() setupSkinChanger(miscPage, createGroupBox) end)
 
-		local gSet1 = createGroupBox(settingPage, "ui & configurations", UDim2.fromOffset(418, 360), UDim2.fromOffset(12, 12))
+		local gSet1 = createGroupBox(settingPage, "ui & configurations", UDim2.fromOffset(418, 520), UDim2.fromOffset(12, 12))
 		local showKeybindsButton = toggle(gSet1, "show keybinds", UDim2.fromOffset(8, 22))
 		setToggle(showKeybindsButton, S.showKeybindsOn, "show keybinds")
 		showKeybindsButton.MouseButton1Click:Connect(function()
@@ -2771,9 +2889,50 @@ local function initMainScript()
 		local bindNoclipBtn   = createKeybindRow(gSet1, "Key: Noclip", "noclip", 204)
 		local bindEspBtn      = createKeybindRow(gSet1, "Key: Player ESP", "esp", 234)
 
+		-- Config manager on Settings tab
+		local cfgNameBox = Instance.new("TextBox")
+		cfgNameBox.Size = UDim2.new(1, -16, 0, 22)
+		cfgNameBox.Position = UDim2.fromOffset(8, 266)
+		cfgNameBox.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+		cfgNameBox.BorderColor3 = Color3.fromRGB(45, 45, 60)
+		cfgNameBox.BorderSizePixel = 1
+		cfgNameBox.PlaceholderText = "config name"
+		cfgNameBox.Text = "default"
+		cfgNameBox.TextColor3 = Color3.new(1, 1, 1)
+		cfgNameBox.TextSize, cfgNameBox.Font = 11, Enum.Font.Code
+		cfgNameBox.ClearTextOnFocus = false
+		cfgNameBox.Parent = gSet1
+
+		local cfgStatus = Instance.new("TextLabel")
+		cfgStatus.Size = UDim2.new(1, -16, 0, 14)
+		cfgStatus.Position = UDim2.fromOffset(8, 290)
+		cfgStatus.BackgroundTransparency = 1
+		cfgStatus.Text = "folder: AntiRival_Configs/  |  keybinds saved too"
+		cfgStatus.TextColor3 = Color3.fromRGB(120, 120, 140)
+		cfgStatus.TextSize, cfgStatus.Font = 10, Enum.Font.Code
+		cfgStatus.TextXAlignment = Enum.TextXAlignment.Left
+		cfgStatus.Parent = gSet1
+
+		local function mkCfgBtn(text, x, y, color)
+			local b = Instance.new("TextButton")
+			b.Size = UDim2.fromOffset(128, 24)
+			b.Position = UDim2.fromOffset(x, y)
+			b.BackgroundColor3 = color
+			b.BorderColor3 = Color3.fromRGB(50, 80, 130)
+			b.BorderSizePixel = 1
+			b.Text = text
+			b.TextColor3 = Color3.fromRGB(100, 180, 255)
+			b.TextSize, b.Font = 11, Enum.Font.Code
+			b.Parent = gSet1
+			return b
+		end
+		local saveCfgBtn = mkCfgBtn("Save Config", 8, 308, Color3.fromRGB(25, 55, 40))
+		local loadCfgBtn = mkCfgBtn("Load Config", 144, 308, Color3.fromRGB(25, 40, 70))
+		local listCfgBtn = mkCfgBtn("List Configs", 280, 308, Color3.fromRGB(40, 35, 25))
+
 		local saveSettingsBtn = Instance.new("TextButton")
 		saveSettingsBtn.Size = UDim2.new(1, -16, 0, 26)
-		saveSettingsBtn.Position = UDim2.fromOffset(8, 266)
+		saveSettingsBtn.Position = UDim2.fromOffset(8, 340)
 		saveSettingsBtn.BackgroundColor3 = Color3.fromRGB(25, 55, 40)
 		saveSettingsBtn.BorderColor3 = Color3.fromRGB(45, 95, 65)
 		saveSettingsBtn.BorderSizePixel = 1
@@ -2782,19 +2941,112 @@ local function initMainScript()
 		saveSettingsBtn.TextSize, saveSettingsBtn.Font = 11, Enum.Font.Code
 		saveSettingsBtn.Parent = gSet1
 
+		local function doSaveSettings(name)
+			name = name or cfgNameBox.Text or "default"
+			local ok, err = SaveConfig(name)
+			return ok, err
+		end
+
 		saveSettingsBtn.MouseButton1Click:Connect(function()
-			pcall(function()
-				SaveConfig()
+			local ok, err = doSaveSettings("default")
+			if ok then
 				saveSettingsBtn.Text = "SAVED SUCCESSFULLY!"
-				task.delay(1.5, function()
-					if saveSettingsBtn and saveSettingsBtn.Parent then saveSettingsBtn.Text = "SAVE SETTINGS" end
-				end)
+				cfgStatus.Text = "Saved settings + keybinds -> default.json"
+			else
+				saveSettingsBtn.Text = "SAVE FAILED"
+				cfgStatus.Text = "Save failed: " .. tostring(err)
+			end
+			task.delay(1.5, function()
+				if saveSettingsBtn and saveSettingsBtn.Parent then saveSettingsBtn.Text = "SAVE SETTINGS" end
 			end)
 		end)
 
+		saveCfgBtn.MouseButton1Click:Connect(function()
+			local ok, err = doSaveSettings(cfgNameBox.Text)
+			cfgStatus.Text = ok and ("Saved: " .. sanitizeConfigName(cfgNameBox.Text) .. ".json (incl. keybinds)") or ("Save failed: " .. tostring(err))
+		end)
+		loadCfgBtn.MouseButton1Click:Connect(function()
+			local ok = LoadConfig(cfgNameBox.Text)
+			cfgStatus.Text = ok and ("Loaded: " .. sanitizeConfigName(cfgNameBox.Text) .. " (UI refreshed)") or "Load failed (file missing?)"
+		end)
+		listCfgBtn.MouseButton1Click:Connect(function()
+			local list = ListConfigs()
+			cfgStatus.Text = (#list == 0) and "No configs in AntiRival_Configs/" or ("Configs: " .. table.concat(list, ", "))
+		end)
+
+		-- Auto Load (script auto-exec on join / other games via autoexec + queue_on_teleport)
+		local autoLoadBtn = Instance.new("TextButton")
+		autoLoadBtn.Size = UDim2.new(1, -16, 0, 26)
+		autoLoadBtn.Position = UDim2.fromOffset(8, 374)
+		autoLoadBtn.BackgroundColor3 = S.autoLoad and Color3.fromRGB(25, 55, 40) or Color3.fromRGB(22, 22, 26)
+		autoLoadBtn.BorderColor3 = Color3.fromRGB(45, 45, 60)
+		autoLoadBtn.BorderSizePixel = 1
+		autoLoadBtn.Text = S.autoLoad and "[ON] Auto Load Script" or "[OFF] Auto Load Script"
+		autoLoadBtn.TextColor3 = S.autoLoad and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 195)
+		autoLoadBtn.TextSize, autoLoadBtn.Font = 11, Enum.Font.Code
+		autoLoadBtn.Parent = gSet1
+
+		local function writeAutoLoadBoot(enabled)
+			local boot = [[
+-- Anti-rival Auto Load boot
+pcall(function()
+	if isfile and isfile("AntiRival_Configs/script.lua") then
+		loadstring(readfile("AntiRival_Configs/script.lua"))()
+	end
+end)
+]]
+			pcall(function()
+				ensureConfigDir()
+				if enabled then
+					if type(makefolder) == "function" and type(isfolder) == "function" then
+						if not isfolder("autoexec") then makefolder("autoexec") end
+					elseif type(makefolder) == "function" then
+						pcall(makefolder, "autoexec")
+					end
+					if type(writefile) == "function" then
+						writefile("autoexec/AntiRival_AutoLoad.lua", boot)
+					end
+					if type(queue_on_teleport) == "function" then
+						queue_on_teleport(boot)
+					elseif syn and syn.queue_on_teleport then
+						syn.queue_on_teleport(boot)
+					elseif queueonteleport then
+						queueonteleport(boot)
+					end
+					writefile(CONFIG_DIR .. "/autoload.json", HttpService:JSONEncode({ enabled = true }))
+				else
+					if type(isfile) == "function" and type(delfile) == "function" then
+						if isfile("autoexec/AntiRival_AutoLoad.lua") then delfile("autoexec/AntiRival_AutoLoad.lua") end
+					end
+					if type(writefile) == "function" then
+						writefile(CONFIG_DIR .. "/autoload.json", HttpService:JSONEncode({ enabled = false }))
+					end
+				end
+			end)
+		end
+
+		autoLoadBtn.MouseButton1Click:Connect(function()
+			S.autoLoad = not S.autoLoad
+			writeAutoLoadBoot(S.autoLoad)
+			autoLoadBtn.BackgroundColor3 = S.autoLoad and Color3.fromRGB(25, 55, 40) or Color3.fromRGB(22, 22, 26)
+			autoLoadBtn.Text = S.autoLoad and "[ON] Auto Load Script" or "[OFF] Auto Load Script"
+			autoLoadBtn.TextColor3 = S.autoLoad and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 195)
+			if S.autoLoad then
+				cfgStatus.Text = "Auto Load ON: put full script at AntiRival_Configs/script.lua"
+			else
+				cfgStatus.Text = "Auto Load OFF"
+			end
+			pcall(function() SaveConfig("default") end)
+		end)
+
+		-- If autoLoad already on from config, re-arm queue
+		if S.autoLoad then
+			pcall(function() writeAutoLoadBoot(true) end)
+		end
+
 		local unloadScriptBtn = Instance.new("TextButton")
 		unloadScriptBtn.Size = UDim2.new(1, -16, 0, 26)
-		unloadScriptBtn.Position = UDim2.fromOffset(8, 302)
+		unloadScriptBtn.Position = UDim2.fromOffset(8, 408)
 		unloadScriptBtn.BackgroundColor3 = Color3.fromRGB(65, 30, 30)
 		unloadScriptBtn.BorderColor3 = Color3.fromRGB(110, 50, 50)
 		unloadScriptBtn.BorderSizePixel = 1
@@ -2912,474 +3164,536 @@ local function initMainScript()
 			end
 		end))
 
-		local function executeFight(state)
-			S.fightOn = state
-			setToggle(fightButton, S.fightOn, "fight mode")
-			if isMobile then fightControlGui.Enabled = S.fightOn end
-			local hum, root = getSafeParts()
+		local function __setupLateSystems()
+			toggleFight = function(state)
+				S.fightOn = state
+				setToggle(fightButton, S.fightOn, "fight mode")
+				if isMobile then fightControlGui.Enabled = S.fightOn end
+				local hum, root = getSafeParts()
 
-			if S.fightOn then
-				if not root or not hum then
-					S.fightOn = false
-					setToggle(fightButton, false, "fight mode")
-					if isMobile then fightControlGui.Enabled = false end
-					return
-				end
-
-				bodyGyro = Instance.new("BodyGyro")
-				bodyGyro.P = 9e4
-				bodyGyro.MaxTorque = Vector3.new(9e4, 9e4, 9e4)
-				bodyGyro.CFrame = root.CFrame
-				bodyGyro.Parent = root
-
-				bodyVelocity = Instance.new("BodyVelocity")
-				bodyVelocity.Velocity = Vector3.zero
-				bodyVelocity.MaxForce = Vector3.new(9e4, 9e4, 9e4)
-				bodyVelocity.Parent = root
-
-				hum.PlatformStand = true
-
-				fightConnection = RunService.RenderStepped:Connect(function()
-					local currentCam = getActiveCamera()
-					local currentHum, currentRoot = getSafeParts()
-					if not S.fightOn or not currentRoot or not currentHum or currentHum.Health <= 0 then
-						if toggleFight then toggleFight(false) end
+				if S.fightOn then
+					if not root or not hum then
+						S.fightOn = false
+						setToggle(fightButton, false, "fight mode")
+						if isMobile then fightControlGui.Enabled = false end
 						return
 					end
 
-					if bodyGyro then bodyGyro.CFrame = currentCam.CFrame end
-					local moveDir = Vector3.zero
+					bodyGyro = Instance.new("BodyGyro")
+					bodyGyro.P = 9e4
+					bodyGyro.MaxTorque = Vector3.new(9e4, 9e4, 9e4)
+					bodyGyro.CFrame = root.CFrame
+					bodyGyro.Parent = root
+
+					bodyVelocity = Instance.new("BodyVelocity")
+					bodyVelocity.Velocity = Vector3.zero
+					bodyVelocity.MaxForce = Vector3.new(9e4, 9e4, 9e4)
+					bodyVelocity.Parent = root
+
+					hum.PlatformStand = true
+
+					fightConnection = RunService.RenderStepped:Connect(function()
+						local currentCam = getActiveCamera()
+						local currentHum, currentRoot = getSafeParts()
+						if not S.fightOn or not currentRoot or not currentHum or currentHum.Health <= 0 then
+							if toggleFight then toggleFight(false) end
+							return
+						end
+
+						if bodyGyro then bodyGyro.CFrame = currentCam.CFrame end
+						local moveDir = Vector3.zero
 					
-					if isMobile then
-						if currentHum.MoveDirection.Magnitude > 0 then moveDir = currentHum.MoveDirection.Unit * S.fightSpeed end
-						if fightUpActive then moveDir = moveDir + Vector3.new(0, S.fightSpeed, 0)
-						elseif fightDownActive then moveDir = moveDir - Vector3.new(0, S.fightSpeed, 0) end
+						if isMobile then
+							if currentHum.MoveDirection.Magnitude > 0 then moveDir = currentHum.MoveDirection.Unit * S.fightSpeed end
+							if fightUpActive then moveDir = moveDir + Vector3.new(0, S.fightSpeed, 0)
+							elseif fightDownActive then moveDir = moveDir - Vector3.new(0, S.fightSpeed, 0) end
+						else
+							if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + currentCam.CFrame.LookVector end
+							if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - currentCam.CFrame.LookVector end
+							if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - currentCam.CFrame.RightVector end
+							if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + currentCam.CFrame.RightVector end
+							if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+							if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+								moveDir = moveDir - Vector3.new(0, 1, 0)
+							end
+						end
+
+						if bodyVelocity then
+							bodyVelocity.Velocity = moveDir.Magnitude > 0 and (isMobile and moveDir or moveDir.Unit * S.fightSpeed) or Vector3.zero
+						end
+					end)
+					trackConn(fightConnection)
+				else
+					if fightConnection then pcall(function() fightConnection:Disconnect() end); fightConnection = nil end
+					if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
+					if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
+					if hum then hum.PlatformStand = false end
+				end
+			end
+
+
+			toggleNoclip = function(state)
+				S.noclipOn = state
+				setToggle(noclipButton, S.noclipOn, "noclip")
+			end
+
+			toggleEsp = function(state)
+				S.espOn = state
+				setToggle(espButton, S.espOn, "player esp")
+			end
+
+			do -- ESP isolated scope (register limit)
+			local function __setupEsp()
+				local espCache = {}
+				local function removeEsp(p)
+					if espCache[p] then
+						if espCache[p].Highlight then espCache[p].Highlight:Destroy() end
+						if espCache[p].InfoBillboard then espCache[p].InfoBillboard:Destroy() end
+						espCache[p] = nil
+					end
+				end
+	
+				local function updateEspForPlayer(p)
+					if p == player then return end
+					local char = p.Character
+					local hum = char and char:FindFirstChildOfClass("Humanoid")
+				
+					if (not S.espOn and not S.namesOn and not S.healthOn) or not char or not char:FindFirstChild("HumanoidRootPart") then
+						removeEsp(p)
+						return
+					end
+	
+					local highlight = espCache[p] and espCache[p].Highlight
+					if S.espOn then
+						if not highlight or not highlight.Parent then
+							highlight = Instance.new("Highlight")
+							highlight.Name = "AntiRivalESP"
+							highlight.Adornee = char
+							highlight.FillColor = Color3.fromRGB(255, 50, 50)
+							highlight.FillTransparency = 0.5
+							highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+							highlight.Parent = char
+						else
+							highlight.Adornee = char
+						end
 					else
-						if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + currentCam.CFrame.LookVector end
-						if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - currentCam.CFrame.LookVector end
-						if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - currentCam.CFrame.RightVector end
-						if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + currentCam.CFrame.RightVector end
-						if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-						if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-							moveDir = moveDir - Vector3.new(0, 1, 0)
+						if highlight then highlight:Destroy(); highlight = nil end
+					end
+	
+					local head = char:FindFirstChild("Head")
+					local infoBillboard = espCache[p] and espCache[p].InfoBillboard
+	
+					if (S.namesOn or S.healthOn) and head then
+						if not infoBillboard or not infoBillboard.Parent then
+							infoBillboard = Instance.new("BillboardGui")
+							infoBillboard.Name = "AntiRivalInfo"
+							infoBillboard.Size = UDim2.new(0, 200, 0, 50)
+							infoBillboard.StudsOffset = Vector3.new(0, 3.0, 0)
+							infoBillboard.AlwaysOnTop = true
+							infoBillboard.Adornee = head
+	
+							local nameText = Instance.new("TextLabel")
+							nameText.Name = "NameText"
+							nameText.Size = UDim2.new(1, 0, 0, 20)
+							nameText.BackgroundTransparency = 1
+							nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
+							nameText.TextSize, nameText.Font = 12, Enum.Font.Code
+							nameText.TextStrokeTransparency = 0
+							nameText.Parent = infoBillboard
+	
+							local healthText = Instance.new("TextLabel")
+							healthText.Name = "HealthText"
+							healthText.Position = UDim2.fromOffset(0, 20)
+							healthText.Size = UDim2.new(1, 0, 0, 20)
+							healthText.BackgroundTransparency = 1
+							healthText.TextColor3 = Color3.fromRGB(100, 180, 255)
+							healthText.TextSize, healthText.Font = 11, Enum.Font.Code
+							healthText.TextStrokeTransparency = 0
+							healthText.Parent = infoBillboard
+	
+							infoBillboard.Parent = head
+						else
+							infoBillboard.Adornee = head
 						end
-					end
-
-					if bodyVelocity then
-						bodyVelocity.Velocity = moveDir.Magnitude > 0 and (isMobile and moveDir or moveDir.Unit * S.fightSpeed) or Vector3.zero
-					end
-				end)
-				trackConn(fightConnection)
-			else
-				if fightConnection then pcall(function() fightConnection:Disconnect() end); fightConnection = nil end
-				if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
-				if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
-				if hum then hum.PlatformStand = false end
-			end
-		end
-
-		toggleFight = executeFight
-
-		local function executeNoclip(state)
-			S.noclipOn = state
-			setToggle(noclipButton, S.noclipOn, "noclip")
-		end
-		toggleNoclip = executeNoclip
-
-		local function executeEsp(state)
-			S.espOn = state
-			setToggle(espButton, S.espOn, "player esp")
-		end
-		toggleEsp = executeEsp
-
-		local espCache = {}
-		local function removeEsp(p)
-			if espCache[p] then
-				if espCache[p].Highlight then espCache[p].Highlight:Destroy() end
-				if espCache[p].InfoBillboard then espCache[p].InfoBillboard:Destroy() end
-				espCache[p] = nil
-			end
-		end
-
-		local function updateEspForPlayer(p)
-			if p == player then return end
-			local char = p.Character
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			
-			if (not S.espOn and not S.namesOn and not S.healthOn) or not char or not char:FindFirstChild("HumanoidRootPart") then
-				removeEsp(p)
-				return
-			end
-
-			local highlight = espCache[p] and espCache[p].Highlight
-			if S.espOn then
-				if not highlight or not highlight.Parent then
-					highlight = Instance.new("Highlight")
-					highlight.Name = "AntiRivalESP"
-					highlight.Adornee = char
-					highlight.FillColor = Color3.fromRGB(255, 50, 50)
-					highlight.FillTransparency = 0.5
-					highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-					highlight.Parent = char
-				else
-					highlight.Adornee = char
-				end
-			else
-				if highlight then highlight:Destroy(); highlight = nil end
-			end
-
-			local head = char:FindFirstChild("Head")
-			local infoBillboard = espCache[p] and espCache[p].InfoBillboard
-
-			if (S.namesOn or S.healthOn) and head then
-				if not infoBillboard or not infoBillboard.Parent then
-					infoBillboard = Instance.new("BillboardGui")
-					infoBillboard.Name = "AntiRivalInfo"
-					infoBillboard.Size = UDim2.new(0, 200, 0, 50)
-					infoBillboard.StudsOffset = Vector3.new(0, 3.0, 0)
-					infoBillboard.AlwaysOnTop = true
-					infoBillboard.Adornee = head
-
-					local nameText = Instance.new("TextLabel")
-					nameText.Name = "NameText"
-					nameText.Size = UDim2.new(1, 0, 0, 20)
-					nameText.BackgroundTransparency = 1
-					nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
-					nameText.TextSize, nameText.Font = 12, Enum.Font.Code
-					nameText.TextStrokeTransparency = 0
-					nameText.Parent = infoBillboard
-
-					local healthText = Instance.new("TextLabel")
-					healthText.Name = "HealthText"
-					healthText.Position = UDim2.fromOffset(0, 20)
-					healthText.Size = UDim2.new(1, 0, 0, 20)
-					healthText.BackgroundTransparency = 1
-					healthText.TextColor3 = Color3.fromRGB(100, 180, 255)
-					healthText.TextSize, healthText.Font = 11, Enum.Font.Code
-					healthText.TextStrokeTransparency = 0
-					healthText.Parent = infoBillboard
-
-					infoBillboard.Parent = head
-				else
-					infoBillboard.Adornee = head
-				end
-
-				local nameLabel = infoBillboard:FindFirstChild("NameText")
-				local healthLabel = infoBillboard:FindFirstChild("HealthText")
-
-				if nameLabel then nameLabel.Visible = S.namesOn; nameLabel.Text = p.Name end
-				if healthLabel then
-					healthLabel.Visible = (S.healthOn and hum ~= nil)
-					if hum then healthLabel.Text = "HP: " .. math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth) end
-				end
-			else
-				if infoBillboard then infoBillboard:Destroy(); infoBillboard = nil end
-			end
-
-			espCache[p] = { Highlight = highlight, InfoBillboard = infoBillboard }
-		end
-
-		trackConn(RunService.RenderStepped:Connect(function()
-			if not S.espOn and not S.namesOn and not S.healthOn then
-				for p, _ in pairs(espCache) do removeEsp(p) end
-				return
-			end
-			for _, p in ipairs(Players:GetPlayers()) do updateEspForPlayer(p) end
-		end))
-
-		trackConn(Players.PlayerRemoving:Connect(function(p) removeEsp(p) end))
-
-		randomTpButton.MouseButton1Click:Connect(function()
-			pcall(function()
-				local _, myRoot = getSafeParts()
-				if not myRoot then return end
-				local validTargets = {}
-				for _, p in ipairs(Players:GetPlayers()) do
-					if p ~= player then
-						local char = p.Character
-						if char then
-							local hum = char:FindFirstChildOfClass("Humanoid")
-							local head = char:FindFirstChild("Head")
-							if hum and hum.Health > 0 and head then table.insert(validTargets, head) end
+	
+						local nameLabel = infoBillboard:FindFirstChild("NameText")
+						local healthLabel = infoBillboard:FindFirstChild("HealthText")
+	
+						if nameLabel then nameLabel.Visible = S.namesOn; nameLabel.Text = p.Name end
+						if healthLabel then
+							healthLabel.Visible = (S.healthOn and hum ~= nil)
+							if hum then healthLabel.Text = "HP: " .. math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth) end
 						end
+					else
+						if infoBillboard then infoBillboard:Destroy(); infoBillboard = nil end
 					end
+	
+					espCache[p] = { Highlight = highlight, InfoBillboard = infoBillboard }
 				end
-				if #validTargets > 0 then
-					local randomHead = validTargets[math.random(1, #validTargets)]
-					local randomAngle = math.random() * math.pi * 2
-					local offsetDir = Vector3.new(math.cos(randomAngle), 0, math.sin(randomAngle))
-					myRoot.CFrame = CFrame.new(randomHead.Position + (offsetDir * 5), randomHead.Position)
-				end
-			end)
-		end)
+	
+				trackConn(RunService.RenderStepped:Connect(function()
+					if not S.espOn and not S.namesOn and not S.healthOn then
+						for p, _ in pairs(espCache) do removeEsp(p) end
+						return
+					end
+					for _, p in ipairs(Players:GetPlayers()) do updateEspForPlayer(p) end
+				end))
+	
+				trackConn(Players.PlayerRemoving:Connect(function(p) removeEsp(p) end))
+			end
+			__setupEsp()
+			end
 
-		trackConn(RunService.RenderStepped:Connect(function()
-			if not S.aimbotOn then return end
-			pcall(function()
-				local currentCam = getActiveCamera()
-				local bestTarget = nil
-				local shortestDist = math.huge
-
-				local hasSelectedTarget = false
-				for p, isSelected in pairs(selectedTargets) do
-					if isSelected then
-						hasSelectedTarget = true
-						local char = p.Character
-						if char then
-							local hum = char:FindFirstChildOfClass("Humanoid")
-							if hum and hum.Health > 0 then
-								local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-								if targetPart then
-									local _, onScreen = currentCam:WorldToViewportPoint(targetPart.Position)
-									if onScreen then
-										local dist = (targetPart.Position - currentCam.CFrame.Position).Magnitude
-										if dist < shortestDist then
-											shortestDist = dist
-											bestTarget = targetPart
-										end
-									end
+			local function __setupExtraLoops()
+				randomTpButton.MouseButton1Click:Connect(function()
+					pcall(function()
+						local _, myRoot = getSafeParts()
+						if not myRoot then return end
+						local validTargets = {}
+						for _, p in ipairs(Players:GetPlayers()) do
+							if p ~= player then
+								local char = p.Character
+								if char then
+									local hum = char:FindFirstChildOfClass("Humanoid")
+									local head = char:FindFirstChild("Head")
+									if hum and hum.Health > 0 and head then table.insert(validTargets, head) end
 								end
 							end
 						end
-					end
-				end
-
-				if not bestTarget and not hasSelectedTarget then
-					for _, p in ipairs(Players:GetPlayers()) do
-						if p ~= player then
-							local char = p.Character
-							if char then
-								local hum = char:FindFirstChildOfClass("Humanoid")
-								if hum and hum.Health > 0 then
-									local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-									if targetPart then
-										local _, onScreen = currentCam:WorldToViewportPoint(targetPart.Position)
-										if onScreen then
-											local dist = (targetPart.Position - currentCam.CFrame.Position).Magnitude
-											if dist < shortestDist then
-												shortestDist = dist
-												bestTarget = targetPart
+						if #validTargets > 0 then
+							local randomHead = validTargets[math.random(1, #validTargets)]
+							local randomAngle = math.random() * math.pi * 2
+							local offsetDir = Vector3.new(math.cos(randomAngle), 0, math.sin(randomAngle))
+							myRoot.CFrame = CFrame.new(randomHead.Position + (offsetDir * 5), randomHead.Position)
+						end
+					end)
+				end)
+	
+				trackConn(RunService.RenderStepped:Connect(function()
+					if not S.aimbotOn then return end
+					pcall(function()
+						local currentCam = getActiveCamera()
+						local bestTarget = nil
+						local shortestDist = math.huge
+	
+						local hasSelectedTarget = false
+						for p, isSelected in pairs(selectedTargets) do
+							if isSelected then
+								hasSelectedTarget = true
+								local char = p.Character
+								if char then
+									local hum = char:FindFirstChildOfClass("Humanoid")
+									if hum and hum.Health > 0 then
+										local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+										if targetPart then
+											local _, onScreen = currentCam:WorldToViewportPoint(targetPart.Position)
+											if onScreen then
+												local dist = (targetPart.Position - currentCam.CFrame.Position).Magnitude
+												if dist < shortestDist then
+													shortestDist = dist
+													bestTarget = targetPart
+												end
 											end
 										end
 									end
 								end
 							end
 						end
-					end
-				end
-
-				if bestTarget then
-					currentCam.CFrame = CFrame.new(currentCam.CFrame.Position, bestTarget.Position)
-				end
-			end)
-		end))
-
-		trackConn(RunService.RenderStepped:Connect(function()
-			if not S.auraOn then return end
-			pcall(function()
-				local _, root = getSafeParts()
-				if not root then return end
-				for _, p in ipairs(Players:GetPlayers()) do
-					if p ~= player then
-						local char = p.Character
-						if char then
-							local hum = char:FindFirstChildOfClass("Humanoid")
-							local targetRoot = char:FindFirstChild("HumanoidRootPart")
-							if hum and hum.Health > 0 and targetRoot and (targetRoot.Position - root.Position).Magnitude <= 20 then
-								for _, tool in ipairs(player.Character:GetChildren()) do
-									if tool:IsA("Tool") then tool:Activate() end
+	
+						if not bestTarget and not hasSelectedTarget then
+							for _, p in ipairs(Players:GetPlayers()) do
+								if p ~= player then
+									local char = p.Character
+									if char then
+										local hum = char:FindFirstChildOfClass("Humanoid")
+										if hum and hum.Health > 0 then
+											local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+											if targetPart then
+												local _, onScreen = currentCam:WorldToViewportPoint(targetPart.Position)
+												if onScreen then
+													local dist = (targetPart.Position - currentCam.CFrame.Position).Magnitude
+													if dist < shortestDist then
+														shortestDist = dist
+														bestTarget = targetPart
+													end
+												end
+											end
+										end
+									end
 								end
 							end
 						end
-					end
-				end
-			end)
-		end))
-
-		local lastTriggerCheck = 0
-		trackConn(RunService.RenderStepped:Connect(function()
-			if not S.triggerBotOn then return end
-			local now = os.clock()
-			if now - lastTriggerCheck < 0.03 then return end
-			lastTriggerCheck = now
-
-			pcall(function()
-				local char = player.Character
-				if not char then return end
-				local currentCam = getActiveCamera()
-				if not currentCam then return end
-
-				-- Ray from camera center (crosshair) - more reliable for FPS
-				local unitRay = currentCam:ViewportPointToRay(currentCam.ViewportSize.X / 2, currentCam.ViewportSize.Y / 2)
-				local raycastParams = RaycastParams.new()
-				raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-				raycastParams.FilterDescendantsInstances = {char}
-				raycastParams.IgnoreWater = true
-
-				local raycastResult = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 2000, raycastParams)
-				if not raycastResult or not raycastResult.Instance then return end
-
-				local hit = raycastResult.Instance
-				local model = hit:FindFirstAncestorOfClass("Model") or hit.Parent
-				if not model then return end
-
-				local hum = model:FindFirstChildOfClass("Humanoid")
-				local p = Players:GetPlayerFromCharacter(model)
-				if hum and hum.Health > 0 and p and p ~= player then
-					for _, tool in ipairs(char:GetChildren()) do
-						if tool:IsA("Tool") then
-							tool:Activate()
+	
+						if bestTarget then
+							currentCam.CFrame = CFrame.new(currentCam.CFrame.Position, bestTarget.Position)
 						end
-					end
-				end
-			end)
-		end))
-
-		trackConn(RunService.Heartbeat:Connect(function()
-			pcall(function()
-				local char = player.Character
-				local hum = char and char:FindFirstChildOfClass("Humanoid")
-				
-				if S.godModeOn and hum then
-					hum.Health = hum.MaxHealth
-				end
-
-				if S.wallbangOn then
-					for _, p in ipairs(Workspace:GetDescendants()) do
-						if p:IsA("BasePart") and not p.Parent:FindFirstChildOfClass("Humanoid") then
-							if p.CanCollide and p.Size.Magnitude < 50 then
-								p.CanCollide = false
+					end)
+				end))
+	
+				trackConn(RunService.RenderStepped:Connect(function()
+					if not S.auraOn then return end
+					pcall(function()
+						local _, root = getSafeParts()
+						if not root then return end
+						for _, p in ipairs(Players:GetPlayers()) do
+							if p ~= player then
+								local char = p.Character
+								if char then
+									local hum = char:FindFirstChildOfClass("Humanoid")
+									local targetRoot = char:FindFirstChild("HumanoidRootPart")
+									if hum and hum.Health > 0 and targetRoot and (targetRoot.Position - root.Position).Magnitude <= 20 then
+										for _, tool in ipairs(player.Character:GetChildren()) do
+											if tool:IsA("Tool") then tool:Activate() end
+										end
+									end
+								end
 							end
 						end
+					end)
+				end))
+	
+				local lastTriggerCheck = 0
+				trackConn(RunService.RenderStepped:Connect(function()
+					if not S.triggerBotOn then return end
+					local now = os.clock()
+					if now - lastTriggerCheck < 0.03 then return end
+					lastTriggerCheck = now
+	
+					pcall(function()
+						local char = player.Character
+						if not char then return end
+						local currentCam = getActiveCamera()
+						if not currentCam then return end
+	
+						-- Ray from camera center (crosshair) - more reliable for FPS
+						local unitRay = currentCam:ViewportPointToRay(currentCam.ViewportSize.X / 2, currentCam.ViewportSize.Y / 2)
+						local raycastParams = RaycastParams.new()
+						raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+						raycastParams.FilterDescendantsInstances = {char}
+						raycastParams.IgnoreWater = true
+	
+						local raycastResult = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 2000, raycastParams)
+						if not raycastResult or not raycastResult.Instance then return end
+	
+						local hit = raycastResult.Instance
+						local model = hit:FindFirstAncestorOfClass("Model") or hit.Parent
+						if not model then return end
+	
+						local hum = model:FindFirstChildOfClass("Humanoid")
+						local p = Players:GetPlayerFromCharacter(model)
+						if hum and hum.Health > 0 and p and p ~= player then
+							for _, tool in ipairs(char:GetChildren()) do
+								if tool:IsA("Tool") then
+									tool:Activate()
+								end
+							end
+						end
+					end)
+				end))
+	
+				trackConn(RunService.Heartbeat:Connect(function()
+					pcall(function()
+						local char = player.Character
+						local hum = char and char:FindFirstChildOfClass("Humanoid")
+					
+						if S.godModeOn and hum then
+							hum.Health = hum.MaxHealth
+						end
+	
+						if S.wallbangOn then
+							for _, p in ipairs(Workspace:GetDescendants()) do
+								if p:IsA("BasePart") and not p.Parent:FindFirstChildOfClass("Humanoid") then
+									if p.CanCollide and p.Size.Magnitude < 50 then
+										p.CanCollide = false
+									end
+								end
+							end
+						end
+					end)
+				end))
+	
+				trackConn(RunService.RenderStepped:Connect(function()
+					if S.forceThirdPersonOn then
+						pcall(function()
+							player.CameraMode = Enum.CameraMode.Classic
+							if player.CameraMinZoomDistance < 10 then player.CameraMinZoomDistance = 10 end
+							local currentCam = getActiveCamera()
+							if currentCam and currentCam.CameraType == Enum.CameraType.Scriptable then
+								currentCam.CameraType = Enum.CameraType.Custom
+							end
+						end)
 					end
-				end
+				end))
+	
+				trackConn(RunService.RenderStepped:Connect(function()
+					if S.orbitOn then
+						pcall(function()
+							local _, root = getSafeParts()
+							if root then
+								local t = os.clock() * 5
+								root.CFrame = CFrame.new(root.Position + Vector3.new(math.cos(t) * 25, 10, math.sin(t) * 25))
+							end
+						end)
+					elseif S.voidSpanOn then
+						pcall(function()
+							local _, root = getSafeParts()
+							if root then root.CFrame = CFrame.new(root.Position + Vector3.new(0, 500, 0)) end
+						end)
+					end
+				end))
+	
+				trackConn(RunService.RenderStepped:Connect(function()
+					if not S.teleporterOn then return end
+					local now = os.clock()
+					if now - S.lastTeleportTick >= 1.0 then
+						S.lastTeleportTick = now
+						pcall(function()
+							local _, root = getSafeParts()
+							if root then
+								local randomAngle = math.random() * math.pi * 2
+								root.CFrame = CFrame.new(root.Position + Vector3.new(math.cos(randomAngle) * S.teleportDistance, 50, math.sin(randomAngle) * S.teleportDistance))
+							end
+						end)
+					end
+				end))
+	
+				trackConn(RunService.Stepped:Connect(function()
+					if not S.noclipOn then return end
+					pcall(function()
+						local char = player.Character
+						if char then
+							for _, part in ipairs(char:GetDescendants()) do
+								if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+							end
+						end
+					end)
+				end))
+	
+			end
+			__setupExtraLoops()
+			walkButton.MouseButton1Click:Connect(function()
+				S.walkOn = not S.walkOn
+				setToggle(walkButton, S.walkOn, "walk speed")
+				local h, _ = getSafeParts()
+				if h then h.WalkSpeed = S.walkOn and S.walkSpeed or 16 end
 			end)
-		end))
 
-		trackConn(RunService.RenderStepped:Connect(function()
-			if S.forceThirdPersonOn then
-				pcall(function()
-					player.CameraMode = Enum.CameraMode.Classic
-					if player.CameraMinZoomDistance < 10 then player.CameraMinZoomDistance = 10 end
-					local currentCam = getActiveCamera()
-					if currentCam and currentCam.CameraType == Enum.CameraType.Scriptable then
-						currentCam.CameraType = Enum.CameraType.Custom
-					end
-				end)
-			end
-		end))
+			fightButton.MouseButton1Click:Connect(function() if toggleFight then toggleFight(not S.fightOn) end end)
 
-		trackConn(RunService.RenderStepped:Connect(function()
-			if S.orbitOn then
-				pcall(function()
-					local _, root = getSafeParts()
-					if root then
-						local t = os.clock() * 5
-						root.CFrame = CFrame.new(root.Position + Vector3.new(math.cos(t) * 25, 10, math.sin(t) * 25))
-					end
-				end)
-			elseif S.voidSpanOn then
-				pcall(function()
-					local _, root = getSafeParts()
-					if root then root.CFrame = CFrame.new(root.Position + Vector3.new(0, 500, 0)) end
-				end)
-			end
-		end))
-
-		trackConn(RunService.RenderStepped:Connect(function()
-			if not S.teleporterOn then return end
-			local now = os.clock()
-			if now - S.lastTeleportTick >= 1.0 then
-				S.lastTeleportTick = now
-				pcall(function()
-					local _, root = getSafeParts()
-					if root then
-						local randomAngle = math.random() * math.pi * 2
-						root.CFrame = CFrame.new(root.Position + Vector3.new(math.cos(randomAngle) * S.teleportDistance, 50, math.sin(randomAngle) * S.teleportDistance))
-					end
-				end)
-			end
-		end))
-
-		trackConn(RunService.Stepped:Connect(function()
-			if not S.noclipOn then return end
-			pcall(function()
-				local char = player.Character
-				if char then
-					for _, part in ipairs(char:GetDescendants()) do
-						if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
-					end
-				end
-			end)
-		end))
-
-		walkButton.MouseButton1Click:Connect(function()
-			S.walkOn = not S.walkOn
-			setToggle(walkButton, S.walkOn, "walk speed")
-			local h, _ = getSafeParts()
-			if h then h.WalkSpeed = S.walkOn and S.walkSpeed or 16 end
-		end)
-
-		fightButton.MouseButton1Click:Connect(function() if toggleFight then toggleFight(not S.fightOn) end end)
-
-		aimbotButton.MouseButton1Click:Connect(function() S.aimbotOn = not S.aimbotOn; setToggle(aimbotButton, S.aimbotOn, "aimbot") end)
+			aimbotButton.MouseButton1Click:Connect(function() S.aimbotOn = not S.aimbotOn; setToggle(aimbotButton, S.aimbotOn, "aimbot") end)
 		
-		silentAimButton.MouseButton1Click:Connect(function()
-			S.silentAimOn = not S.silentAimOn
-			if not S.silentAimOn then
-				env._silentRageActive = false
-				env._silentAimTarget = nil
-			end
-			setToggle(silentAimButton, S.silentAimOn, "silent aim")
-			if S.silentAimOn then _tcAddConsumer() else _tcRemoveConsumer() end
-		end)
+			silentAimButton.MouseButton1Click:Connect(function()
+				S.silentAimOn = not S.silentAimOn
+				if not S.silentAimOn then
+					env._silentRageActive = false
+					env._silentAimTarget = nil
+				end
+				setToggle(silentAimButton, S.silentAimOn, "silent aim")
+				if S.silentAimOn then _tcAddConsumer() else _tcRemoveConsumer() end
+			end)
 
-		ragebotButton.MouseButton1Click:Connect(function()
-			S.ragebotOn = not S.ragebotOn
-			env._riv_startRagebot(S.ragebotOn)
-			setToggle(ragebotButton, S.ragebotOn, "ragebot")
-		end)
+			ragebotButton.MouseButton1Click:Connect(function()
+				S.ragebotOn = not S.ragebotOn
+				env._riv_startRagebot(S.ragebotOn)
+				setToggle(ragebotButton, S.ragebotOn, "ragebot")
+			end)
 
-		auraButton.MouseButton1Click:Connect(function() S.auraOn = not S.auraOn; setToggle(auraButton, S.auraOn, "aura") end)
-		triggerBotButton.MouseButton1Click:Connect(function() S.triggerBotOn = not S.triggerBotOn; setToggle(triggerBotButton, S.triggerBotOn, "trigger bot") end)
-		wallbangButton.MouseButton1Click:Connect(function() S.wallbangOn = not S.wallbangOn; setToggle(wallbangButton, S.wallbangOn, "projectile wallbang") end)
-		godModeButton.MouseButton1Click:Connect(function() S.godModeOn = not S.godModeOn; setToggle(godModeButton, S.godModeOn, "god mode") end)
-		forceThirdPersonButton.MouseButton1Click:Connect(function() S.forceThirdPersonOn = not S.forceThirdPersonOn; setToggle(forceThirdPersonButton, S.forceThirdPersonOn, "force 3rd person (rivals)") end)
+			auraButton.MouseButton1Click:Connect(function() S.auraOn = not S.auraOn; setToggle(auraButton, S.auraOn, "aura") end)
+			triggerBotButton.MouseButton1Click:Connect(function() S.triggerBotOn = not S.triggerBotOn; setToggle(triggerBotButton, S.triggerBotOn, "trigger bot") end)
+			wallbangButton.MouseButton1Click:Connect(function() S.wallbangOn = not S.wallbangOn; setToggle(wallbangButton, S.wallbangOn, "projectile wallbang") end)
+			godModeButton.MouseButton1Click:Connect(function() S.godModeOn = not S.godModeOn; setToggle(godModeButton, S.godModeOn, "god mode") end)
+			forceThirdPersonButton.MouseButton1Click:Connect(function() S.forceThirdPersonOn = not S.forceThirdPersonOn; setToggle(forceThirdPersonButton, S.forceThirdPersonOn, "force 3rd person (rivals)") end)
 
-		rapidFireButton.MouseButton1Click:Connect(function()
-			env._rivRapidFire = not env._rivRapidFire
-			setToggle(rapidFireButton, env._rivRapidFire, "Rapid Fire & Fast ADS")
-		end)
+			rapidFireButton.MouseButton1Click:Connect(function()
+				env._rivRapidFire = not env._rivRapidFire
+				setToggle(rapidFireButton, env._rivRapidFire, "Rapid Fire & Fast ADS")
+			end)
 
-		noRecoilButton.MouseButton1Click:Connect(function()
-			env._rivNoRecoil = not env._rivNoRecoil
-			setToggle(noRecoilButton, env._rivNoRecoil, "No Recoil / No Spread")
-		end)
+			noRecoilButton.MouseButton1Click:Connect(function()
+				env._rivNoRecoil = not env._rivNoRecoil
+				setToggle(noRecoilButton, env._rivNoRecoil, "No Recoil / No Spread")
+			end)
 
-		espButton.MouseButton1Click:Connect(function() if toggleEsp then toggleEsp(not S.espOn) end end)
-		namesButton.MouseButton1Click:Connect(function() S.namesOn = not S.namesOn; setToggle(namesButton, S.namesOn, "player names") end)
-		healthButton.MouseButton1Click:Connect(function() S.healthOn = not S.healthOn; setToggle(healthButton, S.healthOn, "player health text") end)
+			espButton.MouseButton1Click:Connect(function() if toggleEsp then toggleEsp(not S.espOn) end end)
+			namesButton.MouseButton1Click:Connect(function() S.namesOn = not S.namesOn; setToggle(namesButton, S.namesOn, "player names") end)
+			healthButton.MouseButton1Click:Connect(function() S.healthOn = not S.healthOn; setToggle(healthButton, S.healthOn, "player health text") end)
 
-		infiniteJumpButton.MouseButton1Click:Connect(function() S.infiniteJumpOn = not S.infiniteJumpOn; setToggle(infiniteJumpButton, S.infiniteJumpOn, "infinite jump") end)
+			infiniteJumpButton.MouseButton1Click:Connect(function() S.infiniteJumpOn = not S.infiniteJumpOn; setToggle(infiniteJumpButton, S.infiniteJumpOn, "infinite jump") end)
 
-		orbitButton.MouseButton1Click:Connect(function()
-			S.orbitOn = not S.orbitOn
-			if S.orbitOn then S.voidSpanOn = false; setToggle(voidSpanButton, false, "void span mode") end
-			setToggle(orbitButton, S.orbitOn, "orbit position mode")
-		end)
+			orbitButton.MouseButton1Click:Connect(function()
+				S.orbitOn = not S.orbitOn
+				if S.orbitOn then S.voidSpanOn = false; setToggle(voidSpanButton, false, "void span mode") end
+				setToggle(orbitButton, S.orbitOn, "orbit position mode")
+			end)
 
-		voidSpanButton.MouseButton1Click:Connect(function()
-			S.voidSpanOn = not S.voidSpanOn
-			if S.voidSpanOn then S.orbitOn = false; setToggle(orbitButton, false, "orbit position mode") end
-			setToggle(voidSpanButton, S.voidSpanOn, "void span mode")
-		end)
+			voidSpanButton.MouseButton1Click:Connect(function()
+				S.voidSpanOn = not S.voidSpanOn
+				if S.voidSpanOn then S.orbitOn = false; setToggle(orbitButton, false, "orbit position mode") end
+				setToggle(voidSpanButton, S.voidSpanOn, "void span mode")
+			end)
 
-		teleporterButton.MouseButton1Click:Connect(function() S.teleporterOn = not S.teleporterOn; setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)") end)
-		noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
+			teleporterButton.MouseButton1Click:Connect(function() S.teleporterOn = not S.teleporterOn; setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)") end)
+			noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
+
+			-- Apply loaded config values onto buttons / features
+		end
+		__setupLateSystems()
+		env._antiRivalRefreshUI = function()
+			pcall(function()
+				if walkButton then setToggle(walkButton, S.walkOn, "walk speed") end
+				if fightButton then setToggle(fightButton, S.fightOn, "fight mode") end
+				if espButton then setToggle(espButton, S.espOn, "player esp") end
+				if namesButton then setToggle(namesButton, S.namesOn, "player names") end
+				if healthButton then setToggle(healthButton, S.healthOn, "player health text") end
+				if noclipButton then setToggle(noclipButton, S.noclipOn, "noclip") end
+				if aimbotButton then setToggle(aimbotButton, S.aimbotOn, "aimbot") end
+				if silentAimButton then setToggle(silentAimButton, S.silentAimOn, "silent aim") end
+				if ragebotButton then setToggle(ragebotButton, S.ragebotOn, "ragebot") end
+				if auraButton then setToggle(auraButton, S.auraOn, "aura") end
+				if triggerBotButton then setToggle(triggerBotButton, S.triggerBotOn, "trigger bot") end
+				if wallbangButton then setToggle(wallbangButton, S.wallbangOn, "projectile wallbang") end
+				if godModeButton then setToggle(godModeButton, S.godModeOn, "god mode") end
+				if orbitButton then setToggle(orbitButton, S.orbitOn, "orbit position mode") end
+				if voidSpanButton then setToggle(voidSpanButton, S.voidSpanOn, "void span mode") end
+				if infiniteJumpButton then setToggle(infiniteJumpButton, S.infiniteJumpOn, "infinite jump") end
+				if forceThirdPersonButton then setToggle(forceThirdPersonButton, S.forceThirdPersonOn, "force 3rd person (rivals)") end
+				if teleporterButton then setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)") end
+				if rapidFireButton then setToggle(rapidFireButton, env._rivRapidFire, "Rapid Fire & Fast ADS") end
+				if noRecoilButton then setToggle(noRecoilButton, env._rivNoRecoil, "No Recoil / No Spread") end
+				if showKeybindsButton then setToggle(showKeybindsButton, S.showKeybindsOn, "show keybinds") end
+				if showWatermarkButton then setToggle(showWatermarkButton, S.showWatermarkOn, "show watermark") end
+				if kbFrame then kbFrame.Visible = S.showKeybindsOn end
+				if watermarkFrame then watermarkFrame.Visible = S.showWatermarkOn end
+				if bindRandomTpBtn then bindRandomTpBtn.Text = getKeyDisplayStr(keybinds.randomTp) end
+				if bindAutoTpBtn then bindAutoTpBtn.Text = getKeyDisplayStr(keybinds.autoTp) end
+				if bindOrbitBtn then bindOrbitBtn.Text = getKeyDisplayStr(keybinds.orbit) end
+				if bindFightBtn then bindFightBtn.Text = getKeyDisplayStr(keybinds.fight) end
+				if bindNoclipBtn then bindNoclipBtn.Text = getKeyDisplayStr(keybinds.noclip) end
+				if bindEspBtn then bindEspBtn.Text = getKeyDisplayStr(keybinds.esp) end
+				if autoLoadBtn then
+					autoLoadBtn.BackgroundColor3 = S.autoLoad and Color3.fromRGB(25, 55, 40) or Color3.fromRGB(22, 22, 26)
+					autoLoadBtn.Text = S.autoLoad and "[ON] Auto Load Script" or "[OFF] Auto Load Script"
+					autoLoadBtn.TextColor3 = S.autoLoad and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 195)
+				end
+				-- apply walk speed if on
+				if S.walkOn then
+					local h = select(1, getSafeParts())
+					if h then h.WalkSpeed = S.walkSpeed end
+				end
+				if updateKeybindUI then
+					for k, v in pairs(keybinds) do
+						if typeof(v) == "EnumItem" then
+							pcall(updateKeybindUI, k, v.Name)
+						end
+					end
+				end
+			end)
+		end
+		pcall(env._antiRivalRefreshUI)
 
 		pcall(function() showPage("main") end)
 		if gui then gui.Enabled = true end
-		print("Anti-rival beta v0.1.21 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Skybox + Triggerbot)")
+		print("Anti-rival beta v0.2.1.0 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Skybox + Triggerbot)")
 	end)
 end
 
@@ -3419,7 +3733,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.1.21)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.1.0)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
