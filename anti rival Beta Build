@@ -1,4 +1,14 @@
--- [Anti-rival beta v0.2.1.0 재배포 금지 재배포 시 IP 딸거임]
+local function freeze(seconds: number)
+    local startTime = os.clock()
+    while os.clock() - startTime < seconds do
+
+    end
+end
+freeze(2)
+
+task.wait(1)
+
+freeze(3)
 
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
@@ -154,13 +164,23 @@ local function initMainScript()
 							rawset(ClientItem, "Input", function(self, ...)
 								if self and type(self) == "table" and self.Info then
 									if env._rivNoRecoil then
-										pcall(function()
-											rawset(self.Info, "ShootRecoil", 0)
-											rawset(self.Info, "ShootSpread", 0)
-											rawset(self.Info, "ProjectileSpeed", 99999999999)
-										end)
-									end
-									if env._rivRapidFire then
+									pcall(function()
+										local info = self.Info
+										for _, k in ipairs({
+											"ShootRecoil","ShootSpread","Recoil","Spread","Bloom","BloomMax","BloomMin",
+											"RecoilMin","RecoilMax","VerticalRecoil","HorizontalRecoil","CameraRecoil",
+											"AimSpread","HipSpread","SpreadMultiplier","RecoilMultiplier","Kick",
+											"ViewKick","Punch","Inaccuracy"
+										}) do
+											local v = rawget(info, k)
+											if type(v) == "number" then rawset(info, k, 0) end
+										end
+										if rawget(info, "ProjectileSpeed") ~= nil then
+											rawset(info, "ProjectileSpeed", 99999999999)
+										end
+									end)
+								end
+								if env._rivRapidFire then
 										pcall(function()
 											rawset(self.Info, "ShootCooldown", 0)
 											rawset(self.Info, "QuickShotCooldown", 0)
@@ -190,8 +210,6 @@ local function initMainScript()
 						end
 					end
 				end
-
-				-- Improved Silent Aim: Hook StartShooting + UseItem path used by Rivals
 				local gunItemModule = modulesFolder:FindFirstChild("GunItem")
 				if gunItemModule then
 					local ok, GunItem = pcall(require, gunItemModule)
@@ -199,6 +217,17 @@ local function initMainScript()
 						local origStartShooting = rawget(GunItem, "StartShooting") or GunItem.StartShooting
 						if origStartShooting then
 							rawset(GunItem, "StartShooting", function(self, ...)
+								if env._rivNoRecoil and self and type(self) == "table" then
+									pcall(function()
+										if self.Info and type(self.Info) == "table" then
+											for _, k in ipairs({"ShootRecoil","ShootSpread","Recoil","Spread","Bloom","AimSpread","HipSpread"}) do
+												if rawget(self.Info, k) ~= nil and type(rawget(self.Info, k)) == "number" then
+													rawset(self.Info, k, 0)
+												end
+											end
+										end
+									end)
+								end
 								return origStartShooting(self, ...)
 							end)
 						end
@@ -210,7 +239,7 @@ local function initMainScript()
 
 		task.spawn(function()
 			while true do
-				if env._rivRapidFire then
+				if env._rivRapidFire or env._rivNoRecoil then
 					pcall(function()
 						local char = player.Character
 						if char then
@@ -219,7 +248,10 @@ local function initMainScript()
 									for _, v in ipairs(tool:GetDescendants()) do
 										if v:IsA("NumberValue") or v:IsA("IntValue") then
 											local name = v.Name:lower()
-											if name:find("cooldown") or name:find("fire") or name:find("rate") or name:find("delay") then
+											if env._rivRapidFire and (name:find("cooldown") or name:find("fire") or name:find("rate") or name:find("delay")) then
+												v.Value = 0
+											end
+											if env._rivNoRecoil and (name:find("spread") or name:find("recoil") or name:find("bloom") or name:find("kick") or name:find("accuracy")) then
 												v.Value = 0
 											end
 										end
@@ -229,29 +261,67 @@ local function initMainScript()
 						end
 					end)
 				end
-				task.wait(0.2)
+				task.wait(0.15)
 			end
 		end)
 
 		task.spawn(function()
 			while true do
-				if env._rivRapidFire then
+				if env._rivRapidFire or env._rivNoRecoil then
 					pcall(function()
 						for i, v in pairs(getgc(true)) do
 							if type(v) == "table" then
-								if rawget(v, "FireRate") or rawget(v, "Delay") or rawget(v, "ShootCooldown") then
-									if rawget(v, "FireRate") then rawset(v, "FireRate", 0) end
-									if rawget(v, "Delay") then rawset(v, "Delay", 0) end
-									if rawget(v, "ShootCooldown") then rawset(v, "ShootCooldown", 0) end
-									if rawget(v, "Auto") ~= nil then rawset(v, "Auto", true) end
-									if rawget(v, "AutoFire") ~= nil then rawset(v, "AutoFire", true) end
+								if env._rivRapidFire then
+									if rawget(v, "FireRate") or rawget(v, "Delay") or rawget(v, "ShootCooldown") then
+										if rawget(v, "FireRate") then rawset(v, "FireRate", 0) end
+										if rawget(v, "Delay") then rawset(v, "Delay", 0) end
+										if rawget(v, "ShootCooldown") then rawset(v, "ShootCooldown", 0) end
+										if rawget(v, "Auto") ~= nil then rawset(v, "Auto", true) end
+										if rawget(v, "AutoFire") ~= nil then rawset(v, "AutoFire", true) end
+									end
+								end
+								if env._rivNoRecoil then
+									for _, k in ipairs({"ShootRecoil","ShootSpread","Recoil","Spread","Bloom","AimSpread","HipSpread","SpreadMultiplier","RecoilMultiplier"}) do
+										local val = rawget(v, k)
+										if type(val) == "number" and val ~= 0 then
+											rawset(v, k, 0)
+										end
+									end
 								end
 							end
 						end
 					end)
 				end
-				task.wait(2)
+				task.wait(1.5)
 			end
+		end)
+
+		task.spawn(function()
+			while true do
+				if S.walkOn then
+					pcall(function()
+						local char = player.Character
+						local hum = char and char:FindFirstChildOfClass("Humanoid")
+						if hum then
+							if hum.WalkSpeed ~= S.walkSpeed then
+								hum.WalkSpeed = S.walkSpeed
+							end
+						end
+					end)
+				end
+				task.wait(0.05)
+			end
+		end)
+
+		pcall(function()
+			player.CharacterAdded:Connect(function(char)
+				task.defer(function()
+					local hum = char:WaitForChild("Humanoid", 5)
+					if hum and S.walkOn then
+						hum.WalkSpeed = S.walkSpeed
+					end
+				end)
+			end)
 		end)
 
 		local _tcConsumers = 0
@@ -302,7 +372,6 @@ local function initMainScript()
 				return (tostring(s or "")):lower():gsub("[^a-z0-9]", "")
 			end
 
-			-- skin name (normalized) -> exact weapon display name
 			local SKIN_TO_WEAPON = {
 				ak47="Assault Rifle", aug="Assault Rifle", tommygun="Assault Rifle", boneclawrifle="Assault Rifle",
 				gingerbreadaug="Assault Rifle", pearlrifle="Assault Rifle", phoenixrifle="Assault Rifle", akey47="Assault Rifle",
@@ -361,7 +430,7 @@ local function initMainScript()
 				for _, wName in ipairs(weaponNames) do
 					if norm(wName) == want then return wName end
 				end
-				return nil -- NO fuzzy partial match
+				return nil
 			end
 
 			local function collectAssets()
@@ -393,7 +462,7 @@ local function initMainScript()
 						if not (sk:IsA("Model") or sk:IsA("Folder") or #sk:GetChildren() > 0) then return end
 						allSkins[sk.Name] = sk
 
-						-- Attribute / StringValue
+
 						local attrWeapon = nil
 						pcall(function()
 							local a = sk:GetAttribute("Weapon")
@@ -409,20 +478,19 @@ local function initMainScript()
 						end
 						if attrWeapon and place(sk, attrWeapon) then return end
 
-						-- Strict map only
+
 						local mapped = SKIN_TO_WEAPON[norm(sk.Name)]
 						if mapped and place(sk, mapped) then return end
 
-						-- Only if skin name CONTAINS the FULL weapon name (normalized), e.g. "GloriousEnergyRifle"
+
 						local sn = norm(sk.Name)
 						for _, wName in ipairs(weaponNames) do
 							local wn = norm(wName)
-							if #wn >= 8 and sn:find(wn, 1, true) then -- require long full name
+							if #wn >= 8 and sn:find(wn, 1, true) then 
 								place(sk, wName)
 								return
 							end
 						end
-						-- unmapped skins are intentionally NOT shown under any weapon
 					end
 
 					for _, child in ipairs(vm:GetChildren()) do
@@ -500,13 +568,12 @@ local function initMainScript()
 				end)
 				local n1 = replaceSounds(weapon, skinSrc) or 0
 
-				-- Character / Backpack tools
 				pcall(function()
 					local function tryTool(tool)
 						if not tool or not tool:IsA("Tool") then return end
 						if norm(tool.Name) == norm(weapon.Name) then
 							replaceSounds(tool, skinSrc)
-							-- clone missing sounds onto tool
+
 							for _, ss in ipairs(skinSrc:GetDescendants()) do
 								if ss:IsA("Sound") and not tool:FindFirstChild(ss.Name, true) then
 									ss:Clone().Parent = tool
@@ -520,14 +587,12 @@ local function initMainScript()
 					if bp then for _, t in ipairs(bp:GetChildren()) do tryTool(t) end end
 				end)
 
-				-- Live first person viewmodel
 				pcall(function()
 					local fp = workspace:FindFirstChild("ViewModels")
 					fp = fp and fp:FindFirstChild("FirstPerson")
 					if fp then replaceSounds(fp, skinSrc) end
 				end)
 
-				-- Safe sound map for this weapon (no getgc — was breaking Utility.CreateSound)
 				pcall(function()
 					local skinIds = {}
 					for _, s in ipairs(skinSrc:GetDescendants()) do
@@ -755,10 +820,6 @@ local function initMainScript()
 			openBtn.MouseButton1Click:Connect(openSkinMenu)
 		end
 
-		-- ============================================================
-		-- SILENT AIM v4 (Utility.Raycast) - dummies + players
-		-- No camera snap (fixes Ctrl slide left/right bug)
-		-- ============================================================
 		local CollectionService = game:GetService("CollectionService")
 		local _saCachedPart = nil
 		local _saCacheTime = 0
@@ -912,9 +973,7 @@ local function initMainScript()
 
 
 
-		-- =========================
-		-- USER RAGEBOT (Desync) + Kill Far Desync
-		-- =========================
+
 		local _killDesyncActive = false
 		local _killDesyncConn = nil
 		local _killDesyncRestoreName = "__killDesyncRestore"
@@ -957,7 +1016,7 @@ local function initMainScript()
 		end
 
 		local function StartKillDesync()
-			-- Only when NO alive enemies
+
 			if countAliveEnemies() > 0 then
 				return
 			end
@@ -994,7 +1053,6 @@ local function initMainScript()
 				local savedVel = r.AssemblyLinearVelocity
 				local savedRot = r.AssemblyAngularVelocity
 
-				-- What others see
 				r.CFrame = CFrame.new(farPos + Vector3.new(
 					math.random(-80, 80),
 					math.random(-30, 30),
@@ -1003,7 +1061,7 @@ local function initMainScript()
 				r.AssemblyLinearVelocity = Vector3.zero
 				r.AssemblyAngularVelocity = Vector3.zero
 
-				-- Local restore (invisible to self)
+
 				RunService:BindToRenderStep(_killDesyncRestoreName, Enum.RenderPriority.Camera.Value - 1, function()
 					local r2 = getRoot()
 					if r2 then
@@ -1063,14 +1121,14 @@ local function initMainScript()
 			genv.__s9t0u1 = {}
 			local Controller = genv.__s9t0u1
 
-			-- Kill tracking
+
 			local killConnections = {}
 			local tracked = {}
 
 			local function onEnemyDied()
 				if not Controller.__active then return end
 				task.defer(function()
-					task.wait(0.15) -- small delay so death registers
+					task.wait(0.15) 
 					StartKillDesync()
 				end)
 			end
@@ -1271,12 +1329,6 @@ local function initMainScript()
 			end
 		end
 
-
-		-- (moved into S)
-
-		-- (moved into S)
-
-		-- (moved into S)
 		local fightConnection = nil
 		local bodyGyro, bodyVelocity = nil, nil
 
@@ -1395,7 +1447,7 @@ local function initMainScript()
 				if t.rapidFire ~= nil then env._rivRapidFire = t.rapidFire and true or false end
 				if t.noRecoil ~= nil then env._rivNoRecoil = t.noRecoil and true or false end
 			end
-			-- UI refresh (defined after buttons exist)
+
 			if type(env._antiRivalRefreshUI) == "function" then
 				pcall(env._antiRivalRefreshUI)
 			end
@@ -1423,7 +1475,7 @@ local function initMainScript()
 			name = sanitizeConfigName(name or "default")
 			local path = configPath(name)
 			if not isfile(path) then
-				-- migrate legacy single-file config
+
 				if isfile("AntiRival_Config.json") then
 					path = "AntiRival_Config.json"
 				else
@@ -1542,7 +1594,7 @@ local function initMainScript()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.2.1.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.2.2.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -1560,7 +1612,7 @@ local function initMainScript()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.2.1.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.2.2.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -1587,7 +1639,7 @@ local function initMainScript()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.1.0)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.2.0)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1807,7 +1859,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.2.1.0 - discord.gg/6tCjcYUt7"
+		title.Text = "Anti-rival beta v0.2.2.0 - https://discord.gg/eV6xjgvjZ"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -2108,7 +2160,7 @@ local function initMainScript()
 			if fovCircle then fovCircle.Radius = val end
 		end)
 
-		-- Target mode: Players / Dummies / Both
+
 		local function makeSmallBtn(parent, text, pos, w)
 			local b = Instance.new("TextButton")
 			b.Size = UDim2.fromOffset(w, 22)
@@ -2153,7 +2205,7 @@ local function initMainScript()
 		btnTargetBoth.MouseButton1Click:Connect(function() S.silentAimTargetMode = "Both"; refreshTargetModeUI() end)
 		refreshTargetModeUI()
 
-		-- Hit part: Head / Body
+
 		local hitPartLabel = Instance.new("TextLabel")
 		hitPartLabel.Size = UDim2.new(1, -16, 0, 16)
 		hitPartLabel.Position = UDim2.fromOffset(8, 270)
@@ -2217,9 +2269,6 @@ local function initMainScript()
 		randomTpButton.TextSize, randomTpButton.Font = 10, Enum.Font.Code
 		randomTpButton.Parent = gVis1
 
-		-- ==========================================
-		-- Custom Shader (Persistent Effects)
-		-- ==========================================
 		local gVis2 = createGroupBox(visualsPage, "custom shader", UDim2.fromOffset(418, 70), UDim2.fromOffset(12, 230))
 		local customShaderButton = Instance.new("TextButton")
 		customShaderButton.Size = UDim2.new(1, -16, 0, 32)
@@ -2234,7 +2283,7 @@ local function initMainScript()
 
 		customShaderButton.Parent = gVis2
 
-		-- Skybox presets (SKY ONLY — proven texture sets only)
+
 		local gSky = createGroupBox(visualsPage, "skybox", UDim2.fromOffset(418, 70), UDim2.fromOffset(12, 310))
 		local _skyOriginal = nil
 		pcall(function()
@@ -2242,7 +2291,7 @@ local function initMainScript()
 			if existing then _skyOriginal = existing:Clone() end
 		end)
 
-		-- Only use skybox IDs known to load in Roblox (Space-style = Sky instance only)
+
 		local skyPresets = {
 			{ name = "Default", sky = nil },
 			{ name = "Space", sky = {
@@ -2294,7 +2343,7 @@ local function initMainScript()
 				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
 				CelestialBodiesShown=true, StarCount=3000, MoonAngularSize=20 }},
 			{ name = "Aurora", sky = {
-				-- uses night base (loads reliably); high stars for aurora-ish look
+
 				SkyboxBk="rbxassetid://12064107", SkyboxDn="rbxassetid://12064152", SkyboxFt="rbxassetid://12064121",
 				SkyboxLf="rbxassetid://12064115", SkyboxRt="rbxassetid://12064124", SkyboxUp="rbxassetid://12064131",
 				CelestialBodiesShown=false, StarCount=7000 }},
@@ -2463,7 +2512,7 @@ local function initMainScript()
 			pcall(openSkyMenu)
 		end)
 
-		-- 쉐이더 효과 전역 상태 (창을 닫아도 유지)
+
 		local shaderState = {
 			colorEffect = nil,
 			blurEffect = nil,
@@ -2558,7 +2607,6 @@ local function initMainScript()
 				shaderState.auroraEmitter.Parent = shaderState.auroraPart
 			end
 
-			-- 파티클 추적 루프 (한 번만 연결)
 			if not shaderState.runConnection then
 				shaderState.runConnection = RunService.RenderStepped:Connect(function()
 					local cam = Workspace.CurrentCamera
@@ -2577,7 +2625,7 @@ local function initMainScript()
 		end
 
 		local function launchCustomShader()
-			-- 이미 메뉴가 열려있으면 무시
+
 			local pg = player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 5)
 			if not pg then
 				warn("[Anti-rival] PlayerGui missing")
@@ -2721,7 +2769,7 @@ local function initMainScript()
 				end)
 			end
 
-			-- 드래그
+
 			local draggingShader = false
 			local dragInputShader, dragStartShader, startPosShader
 
@@ -2753,11 +2801,11 @@ local function initMainScript()
 			end)
 			trackConn(dragConn)
 
-			-- ★ 닫기 버튼: UI만 닫고 효과는 유지
+
 			closeButton.MouseButton1Click:Connect(function()
 				if dragConn then dragConn:Disconnect() end
 
-				-- 마우스 상태 복구 (메인 UI 상태에 맞춤)
+
 				if window and window.Visible then
 					UserInputService.MouseIconEnabled = true
 					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
@@ -2766,7 +2814,6 @@ local function initMainScript()
 					UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 				end
 
-				-- UI만 삭제 (효과/파티클/루프는 그대로 유지)
 				screenGui:Destroy()
 			end)
 		end
@@ -2889,7 +2936,6 @@ local function initMainScript()
 		local bindNoclipBtn   = createKeybindRow(gSet1, "Key: Noclip", "noclip", 204)
 		local bindEspBtn      = createKeybindRow(gSet1, "Key: Player ESP", "esp", 234)
 
-		-- Config manager on Settings tab
 		local cfgNameBox = Instance.new("TextBox")
 		cfgNameBox.Size = UDim2.new(1, -16, 0, 22)
 		cfgNameBox.Position = UDim2.fromOffset(8, 266)
@@ -2974,7 +3020,7 @@ local function initMainScript()
 			cfgStatus.Text = (#list == 0) and "No configs in AntiRival_Configs/" or ("Configs: " .. table.concat(list, ", "))
 		end)
 
-		-- Auto Load (script auto-exec on join / other games via autoexec + queue_on_teleport)
+
 		local autoLoadBtn = Instance.new("TextButton")
 		autoLoadBtn.Size = UDim2.new(1, -16, 0, 26)
 		autoLoadBtn.Position = UDim2.fromOffset(8, 374)
@@ -3039,7 +3085,7 @@ end)
 			pcall(function() SaveConfig("default") end)
 		end)
 
-		-- If autoLoad already on from config, re-arm queue
+
 		if S.autoLoad then
 			pcall(function() writeAutoLoadBoot(true) end)
 		end
@@ -3072,7 +3118,7 @@ end)
 				local existingGamma = lighting:FindFirstChild("AntiRivalGamma")
 				if existingGamma then existingGamma:Destroy() end
 
-				-- 쉐이더 효과 완전 정리
+
 				if shaderState.colorEffect then shaderState.colorEffect:Destroy() end
 				if shaderState.blurEffect then shaderState.blurEffect:Destroy() end
 				if shaderState.bloomEffect then shaderState.bloomEffect:Destroy() end
@@ -3242,7 +3288,7 @@ end)
 				setToggle(espButton, S.espOn, "player esp")
 			end
 
-			do -- ESP isolated scope (register limit)
+			do 
 			local function __setupEsp()
 				local espCache = {}
 				local function removeEsp(p)
@@ -3465,7 +3511,6 @@ end)
 						local currentCam = getActiveCamera()
 						if not currentCam then return end
 	
-						-- Ray from camera center (crosshair) - more reliable for FPS
 						local unitRay = currentCam:ViewportPointToRay(currentCam.ViewportSize.X / 2, currentCam.ViewportSize.Y / 2)
 						local raycastParams = RaycastParams.new()
 						raycastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -3635,7 +3680,6 @@ end)
 			teleporterButton.MouseButton1Click:Connect(function() S.teleporterOn = not S.teleporterOn; setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)") end)
 			noclipButton.MouseButton1Click:Connect(function() if toggleNoclip then toggleNoclip(not S.noclipOn) end end)
 
-			-- Apply loaded config values onto buttons / features
 		end
 		__setupLateSystems()
 		env._antiRivalRefreshUI = function()
@@ -3675,7 +3719,7 @@ end)
 					autoLoadBtn.Text = S.autoLoad and "[ON] Auto Load Script" or "[OFF] Auto Load Script"
 					autoLoadBtn.TextColor3 = S.autoLoad and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 195)
 				end
-				-- apply walk speed if on
+
 				if S.walkOn then
 					local h = select(1, getSafeParts())
 					if h then h.WalkSpeed = S.walkSpeed end
@@ -3693,7 +3737,7 @@ end)
 
 		pcall(function() showPage("main") end)
 		if gui then gui.Enabled = true end
-		print("Anti-rival beta v0.2.1.0 Enhanced & Loaded Successfully! (Silent Aim v4 + Skin Menu + Skybox + Triggerbot)")
+		print("Anti-rival beta v0.2.2.0 Enhanced & Loaded Successfully!")
 	end)
 end
 
@@ -3733,7 +3777,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.1.0)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.2.0)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
