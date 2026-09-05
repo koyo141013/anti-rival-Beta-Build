@@ -10,7 +10,7 @@ textLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 textLabel.TextSize = 24
 textLabel.Font = Enum.Font.SourceSansBold
-textLabel.Text = "현재 anti rival는 rivals 업데이트 (anti cheat) 로 인하여 다운되었습니다. 최대한 빨리 수정하겠습니다. 현재 안티 라이벌을 실행하면 화면이 멈춤니다. 현재 안티 라이벌은 개발자 2명만 이용 가능합니다"
+textLabel.Text = "Not all game files are what we expected.. wait for an update or try again!"
 textLabel.Parent = screenGui
 task.wait(5.0)
 player:Kick("\n\nAnti-Rival is currently down due to the recent Rivals anti-cheat update. We are working to fix this as quickly as possible. Please note that launching Anti-Rival right now will cause your screen to freeze. 현재 안티 라이벌은 개발자 2명만 이용 가능합니다")
