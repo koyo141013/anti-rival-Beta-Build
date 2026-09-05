@@ -13,4 +13,4 @@ textLabel.Font = Enum.Font.SourceSansBold
 textLabel.Text = "Not all game files are what we expected.. wait for an update or try again!"
 textLabel.Parent = screenGui
 task.wait(5.0)
-player:Kick("\n\nAnti-Rival is currently down due to the recent Rivals anti-cheat update. We are working to fix this as quickly as possible. Please note that launching Anti-Rival right now will cause your screen to freeze. 현재 안티 라이벌은 개발자 2명만 이용 가능합니다")
+player:Kick("\n\nAnti-Rival is currently down due to the recent Rivals anti-cheat update. We are working to fix this as quickly as possible. Please note that launching Anti-Rival right now will cause your screen to freeze.")
