@@ -149,6 +149,47 @@ local function initMainScript()
 			return bestTarget
 		end
 
+		-- Rapid Fire / No Spread (stable: light tool loop + slow getgc, no per-frame GC)
+		local function patchInfoTable(info)
+			if type(info) ~= "table" then
+				return
+			end
+			if env._rivNoRecoil then
+				for _, k in ipairs({
+					"ShootRecoil","ShootSpread","Recoil","Spread","Bloom","BloomMax","BloomMin",
+					"RecoilMin","RecoilMax","VerticalRecoil","HorizontalRecoil","CameraRecoil",
+					"AimSpread","HipSpread","SpreadMultiplier","RecoilMultiplier","Kick",
+					"ViewKick","Punch","Inaccuracy"
+				}) do
+					local v = rawget(info, k)
+					if type(v) == "number" then
+						rawset(info, k, 0)
+					end
+				end
+				if rawget(info, "ProjectileSpeed") ~= nil then
+					rawset(info, "ProjectileSpeed", 99999999999)
+				end
+			end
+			if env._rivRapidFire then
+				rawset(info, "ShootCooldown", 0)
+				rawset(info, "QuickShotCooldown", 0)
+				rawset(info, "FireRate", 0)
+				rawset(info, "Delay", 0)
+				if rawget(info, "Cooldown") ~= nil and type(rawget(info, "Cooldown")) == "number" then
+					rawset(info, "Cooldown", 0)
+				end
+				if rawget(info, "Auto") ~= nil then
+					rawset(info, "Auto", true)
+				end
+				if rawget(info, "AutoFire") ~= nil then
+					rawset(info, "AutoFire", true)
+				end
+				if rawget(info, "Automatic") ~= nil then
+					rawset(info, "Automatic", true)
+				end
+			end
+		end
+
 		pcall(function()
 			local modulesFolder = ReplicatedStorage:WaitForChild("Modules", 5)
 			if not modulesFolder then
@@ -160,53 +201,11 @@ local function initMainScript()
 				local ok, ClientItem = pcall(require, clientItemModule)
 				if ok and ClientItem then
 					local origInput = rawget(ClientItem, "Input") or ClientItem.Input
-					if origInput then
+					if type(origInput) == "function" then
 						rawset(ClientItem, "Input", function(self, ...)
 							if self and type(self) == "table" and self.Info then
-								if env._rivNoRecoil then
-									pcall(function()
-										local info = self.Info
-										local keys = {
-											"ShootRecoil","ShootSpread","Recoil","Spread","Bloom","BloomMax","BloomMin",
-											"RecoilMin","RecoilMax","VerticalRecoil","HorizontalRecoil","CameraRecoil",
-											"AimSpread","HipSpread","SpreadMultiplier","RecoilMultiplier","Kick",
-											"ViewKick","Punch","Inaccuracy"
-										}
-										for _, k in ipairs(keys) do
-											local v = rawget(info, k)
-											if type(v) == "number" then
-												rawset(info, k, 0)
-											end
-										end
-										if rawget(info, "ProjectileSpeed") ~= nil then
-											rawset(info, "ProjectileSpeed", 99999999999)
-										end
-									end)
-								end
-								if env._rivRapidFire then
-									pcall(function()
-										local info = self.Info
-										local keys = {
-											"ShootCooldown","QuickShotCooldown","FireRate","Delay","Cooldown",
-											"FireDelay","ShotDelay","RateOfFire","RPM","NextShot","LastShot"
-										}
-										for _, k in ipairs(keys) do
-											local v = rawget(info, k)
-											if type(v) == "number" then
-												if k == "FireRate" or k == "RPM" or k == "RateOfFire" then
-													rawset(info, k, 99999999)
-												else
-													rawset(info, k, 0)
-												end
-											end
-										end
-										if rawget(info, "Auto") ~= nil then
-											rawset(info, "Auto", true)
-										end
-										if rawget(info, "Automatic") ~= nil then
-											rawset(info, "Automatic", true)
-										end
-									end)
+								if env._rivNoRecoil or env._rivRapidFire then
+									pcall(patchInfoTable, self.Info)
 								end
 							end
 							return origInput(self, ...)
@@ -220,12 +219,23 @@ local function initMainScript()
 				local ok, Gun = pcall(require, gunModule)
 				if ok and Gun then
 					local origGetAimSpeed = rawget(Gun, "GetAimSpeed") or Gun.GetAimSpeed
-					if origGetAimSpeed then
+					if type(origGetAimSpeed) == "function" then
 						rawset(Gun, "GetAimSpeed", function(...)
 							if env._rivRapidFire then
 								return 999
 							end
 							return origGetAimSpeed(...)
+						end)
+					end
+					local origStart = rawget(Gun, "StartShooting") or Gun.StartShooting
+					if type(origStart) == "function" then
+						rawset(Gun, "StartShooting", function(self, ...)
+							if self and type(self) == "table" and self.Info then
+								if env._rivNoRecoil or env._rivRapidFire then
+									pcall(patchInfoTable, self.Info)
+								end
+							end
+							return origStart(self, ...)
 						end)
 					end
 				end
@@ -236,20 +246,12 @@ local function initMainScript()
 				local ok, GunItem = pcall(require, gunItemModule)
 				if ok and GunItem then
 					local origStartShooting = rawget(GunItem, "StartShooting") or GunItem.StartShooting
-					if origStartShooting then
+					if type(origStartShooting) == "function" then
 						rawset(GunItem, "StartShooting", function(self, ...)
-							if env._rivNoRecoil and self and type(self) == "table" then
-								pcall(function()
-									if self.Info and type(self.Info) == "table" then
-										local keys = {"ShootRecoil","ShootSpread","Recoil","Spread","Bloom","AimSpread","HipSpread"}
-										for _, k in ipairs(keys) do
-											local v = rawget(self.Info, k)
-											if type(v) == "number" then
-												rawset(self.Info, k, 0)
-											end
-										end
-									end
-								end)
+							if self and type(self) == "table" and self.Info then
+								if env._rivNoRecoil or env._rivRapidFire then
+									pcall(patchInfoTable, self.Info)
+								end
 							end
 							return origStartShooting(self, ...)
 						end)
@@ -258,7 +260,7 @@ local function initMainScript()
 			end
 		end)
 
-
+		-- Tool NumberValues (light)
 		task.spawn(function()
 			while true do
 				if env._rivRapidFire or env._rivNoRecoil then
@@ -269,11 +271,11 @@ local function initMainScript()
 								if tool:IsA("Tool") then
 									for _, v in ipairs(tool:GetDescendants()) do
 										if v:IsA("NumberValue") or v:IsA("IntValue") then
-											local name = v.Name:lower()
-											if env._rivRapidFire and (name:find("cooldown") or name:find("fire") or name:find("rate") or name:find("delay")) then
+											local name = string.lower(v.Name)
+											if env._rivRapidFire and (string.find(name, "cooldown") or string.find(name, "fire") or string.find(name, "rate") or string.find(name, "delay")) then
 												v.Value = 0
 											end
-											if env._rivNoRecoil and (name:find("spread") or name:find("recoil") or name:find("bloom") or name:find("kick") or name:find("accuracy")) then
+											if env._rivNoRecoil and (string.find(name, "spread") or string.find(name, "recoil") or string.find(name, "bloom") or string.find(name, "kick") or string.find(name, "accuracy")) then
 												v.Value = 0
 											end
 										end
@@ -287,22 +289,52 @@ local function initMainScript()
 			end
 		end)
 
-		-- Light maintenance (NO full getgc for no-recoil — that caused severe lag)
+		-- getgc patch (slow interval only — dd.txt style; avoids freeze)
 		task.spawn(function()
 			while true do
-				if env._rivRapidFire then
+				if env._rivRapidFire or env._rivNoRecoil then
 					pcall(function()
-						for _, v in pairs(getgc(false)) do
-							if type(v) == "table" and (rawget(v, "FireRate") or rawget(v, "ShootCooldown") or rawget(v, "Delay")) then
-								if rawget(v, "FireRate") then rawset(v, "FireRate", 0) end
-								if rawget(v, "Delay") then rawset(v, "Delay", 0) end
-								if rawget(v, "ShootCooldown") then rawset(v, "ShootCooldown", 0) end
-								if rawget(v, "Cooldown") and type(rawget(v, "Cooldown")) == "number" then rawset(v, "Cooldown", 0) end
+						for _, v in pairs(getgc(true)) do
+							if type(v) == "table" then
+								if env._rivRapidFire then
+									if rawget(v, "FireRate") or rawget(v, "Delay") or rawget(v, "ShootCooldown") then
+										if rawget(v, "FireRate") then
+											rawset(v, "FireRate", 0)
+										end
+										if rawget(v, "Delay") then
+											rawset(v, "Delay", 0)
+										end
+										if rawget(v, "ShootCooldown") then
+											rawset(v, "ShootCooldown", 0)
+										end
+										if rawget(v, "Auto") ~= nil then
+											rawset(v, "Auto", true)
+										end
+										if rawget(v, "AutoFire") ~= nil then
+											rawset(v, "AutoFire", true)
+										end
+									end
+								end
+								if env._rivNoRecoil then
+									for _, k in ipairs({
+										"ShootRecoil","ShootSpread","Recoil","Spread","Bloom",
+										"AimSpread","HipSpread","SpreadMultiplier","RecoilMultiplier"
+									}) do
+										local val = rawget(v, k)
+										if type(val) == "number" and val ~= 0 then
+											rawset(v, k, 0)
+										end
+									end
+								end
+								local info = rawget(v, "Info")
+								if type(info) == "table" then
+									patchInfoTable(info)
+								end
 							end
 						end
 					end)
 				end
-				task.wait(env._rivRapidFire and 1 or 3)
+				task.wait(1.5)
 			end
 		end)
 
@@ -751,7 +783,7 @@ local function initMainScript()
 					clearList()
 					local wName = weaponNames[weaponIdx]
 					local list = skinsByWeapon[wName] or {}
-					countLbl.Text = string.format("%d skins for %s", #list, wName)
+					countLbl.Text = tostring(#list) .. " skins for " .. tostring(wName)
 					scrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(#list, 1) * 36 + 8)
 					if #list == 0 then
 						local empty = Instance.new("TextLabel")
@@ -3848,13 +3880,20 @@ local function initMainScript()
 						if type(writefile) == "function" then
 							writefile("autoexec/AntiRival_AutoLoad.lua", boot)
 						end
-						if type(queue_on_teleport) == "function" then
-							queue_on_teleport(boot)
-						elseif syn and syn.queue_on_teleport then
-							syn.queue_on_teleport(boot)
-						elseif queueonteleport then
-							queueonteleport(boot)
-						end
+						pcall(function()
+							if type(queue_on_teleport) == "function" then
+								queue_on_teleport(boot)
+							elseif type(queueonteleport) == "function" then
+								queueonteleport(boot)
+							else
+								local okSyn, synLib = pcall(function()
+									return rawget(getfenv(), "syn")
+								end)
+								if okSyn and type(synLib) == "table" and type(synLib.queue_on_teleport) == "function" then
+									synLib.queue_on_teleport(boot)
+								end
+							end
+						end)
 						writefile(CONFIG_DIR .. "/autoload.json", HttpService:JSONEncode({ enabled = true }))
 					else
 						if type(isfile) == "function" and type(delfile) == "function" then
@@ -3980,7 +4019,10 @@ local function initMainScript()
 							setToggle(teleporterButton, S.teleporterOn, "auto 50k tp (every 1s)")
 						elseif keybinds.orbit ~= Enum.KeyCode.Unknown and input.KeyCode == keybinds.orbit then
 							S.orbitOn = not S.orbitOn
-							if S.orbitOn then S.voidSpanOn = false; setToggle(voidSpanButton, false, "void span mode") end
+							if S.orbitOn then
+							S.voidSpanOn = false
+							setToggle(voidSpanButton, false, "void span mode")
+						end
 							setToggle(orbitButton, S.orbitOn, "orbit position mode")
 						elseif keybinds.fight ~= Enum.KeyCode.Unknown and input.KeyCode == keybinds.fight then
 							if toggleFight then toggleFight(not S.fightOn) end
@@ -4010,6 +4052,7 @@ local function initMainScript()
 				gSet1 = gSet1,
 				showKeybindsButton = showKeybindsButton,
 				showWatermarkButton = showWatermarkButton,
+				autoLoadBtn = autoLoadBtn,
 				bindRandomTpBtn = bindRandomTpBtn,
 				bindAutoTpBtn = bindAutoTpBtn,
 				bindOrbitBtn = bindOrbitBtn,
@@ -4488,7 +4531,10 @@ local function initMainScript()
 
 			orbitButton.MouseButton1Click:Connect(function()
 				S.orbitOn = not S.orbitOn
-				if S.orbitOn then S.voidSpanOn = false; setToggle(voidSpanButton, false, "void span mode") end
+				if S.orbitOn then
+							S.voidSpanOn = false
+							setToggle(voidSpanButton, false, "void span mode")
+						end
 				setToggle(orbitButton, S.orbitOn, "orbit position mode")
 			end)
 
@@ -4564,10 +4610,11 @@ local function initMainScript()
 				if bindFightBtn then bindFightBtn.Text = getKeyDisplayStr(keybinds.fight) end
 				if bindNoclipBtn then bindNoclipBtn.Text = getKeyDisplayStr(keybinds.noclip) end
 				if bindEspBtn then bindEspBtn.Text = getKeyDisplayStr(keybinds.esp) end
-				if autoLoadBtn then
-					autoLoadBtn.BackgroundColor3 = S.autoLoad and Color3.fromRGB(25, 55, 40) or Color3.fromRGB(22, 22, 26)
-					autoLoadBtn.Text = S.autoLoad and "[ON] Auto Load Script" or "[OFF] Auto Load Script"
-					autoLoadBtn.TextColor3 = S.autoLoad and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 195)
+				local _alb = env._settingsUI and env._settingsUI.autoLoadBtn
+				if _alb then
+					_alb.BackgroundColor3 = S.autoLoad and Color3.fromRGB(25, 55, 40) or Color3.fromRGB(22, 22, 26)
+					_alb.Text = S.autoLoad and "[ON] Auto Load Script" or "[OFF] Auto Load Script"
+					_alb.TextColor3 = S.autoLoad and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 195)
 				end
 				-- apply walk speed if on
 				if S.walkOn then
