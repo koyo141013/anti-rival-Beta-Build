@@ -1,4 +1,4 @@
--- [Anti-rival beta v0.2.8.0 재배포 금지 재배포 시 IP 딸거임]
+-- [Anti-rival beta v0.2.9.0 재배포 금지 재배포 시 IP 딸거임]
 
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
@@ -98,11 +98,15 @@ local function initMainScript()
 			walkOn = false, fightOn = false, espOn = false, namesOn = false, healthOn = false, noclipOn = false,
 			aimbotOn = false, aimbotStrength = 40, aimbotHitPart = "Both", silentAimOn = false, silentAimFOV = 350,
 			silentAimTargetMode = "Players", silentAimHitPart = "Body",
-			ragebotOn = false, auraOn = false, triggerBotOn = false, wallbangOn = false,
+			ragebotOn = false, ragebotStability = 0.15, ragebotShootFrames = 1,
+			auraOn = false, triggerBotOn = false, wallbangOn = false,
 			godModeOn = false, orbitOn = false, voidSpanOn = false, infiniteJumpOn = false,
 			forceThirdPersonOn = false, teleporterOn = false, lastTeleportTick = 0, teleportDistance = 50000,
 			walkSpeed = 16, fightSpeed = 50, showKeybindsOn = true, showWatermarkOn = true,
 			autoLoad = false,
+			espEnemyName = true, espEnemyDistance = false, espEnemyRank = false, espEnemyWinstreak = false,
+			espEnemyHealth = true, espNumberEnemy = false, espHeldWeapon = false, espEnemyDeflecting = false,
+			espGeometry = false, espEnemyBox = true,
 			spoofWinStreak = false, spoofLevel = false, spoofRankedELO = false,
 			spoofNametagStatus = false, spoofInfluencer = false, spoofRobloxEmployee = false, spoofNosniyTeam = false,
 			spoofWinStreakValue = 99, spoofLevelValue = 999,
@@ -460,20 +464,18 @@ local function initMainScript()
 
 
 		-- ============================================================
-		-- SILENT AIM v6 (Rivals Utility.Raycast direct assign + safe fallback)
+		-- ============================================================
+		-- SILENT AIM v8 — Utility.Raycast ONLY when distance==999 (Rivals shoot)
+		-- Does NOT move character / camera / workspace rays
 		-- ============================================================
 		local _saCachedPart = nil
 		local _saCacheTime = 0
-		local BodyPartsList = { "HitboxBody", "UpperTorso", "HumanoidRootPart", "Torso", "HitboxBodySmall", "FakeMass" }
+		local BodyPartsList = { "HitboxBody", "UpperTorso", "HumanoidRootPart", "Torso", "HitboxBodySmall" }
 		local HeadPartsList = { "HitboxHead", "Head" }
 
 		local function _saPickPart(model)
-			local order
-			if S.silentAimHitPart == "Head" then
-				order = { HeadPartsList, BodyPartsList }
-			else
-				order = { BodyPartsList, HeadPartsList }
-			end
+			if not model then return nil end
+			local order = (S.silentAimHitPart == "Head") and { HeadPartsList, BodyPartsList } or { BodyPartsList, HeadPartsList }
 			for _, list in ipairs(order) do
 				for _, name in ipairs(list) do
 					local p = model:FindFirstChild(name)
@@ -485,7 +487,7 @@ local function initMainScript()
 
 		local function _saGetClosestPart()
 			local now = os.clock()
-			if _saCachedPart and _saCachedPart.Parent and (now - _saCacheTime) < 0.04 then
+			if _saCachedPart and _saCachedPart.Parent and (now - _saCacheTime) < 0.06 then
 				return _saCachedPart
 			end
 			local cam = Workspace.CurrentCamera
@@ -515,102 +517,62 @@ local function initMainScript()
 			_saCachedPart = best
 			_saCacheTime = now
 			env._silentAimTarget = best
-			env._silentRageActive = best ~= nil and S.silentAimOn
+			-- never set movement-related flags
+			env._silentRageActive = false
 			return best
 		end
 
-		-- Refresh target while silent aim on (lightweight)
 		task.spawn(function()
 			while true do
 				if S.silentAimOn then
 					pcall(_saGetClosestPart)
-					task.wait(0.04)
+					task.wait(0.06)
 				else
 					_saCachedPart = nil
 					env._silentAimTarget = nil
 					env._silentRageActive = false
-					task.wait(0.2)
+					task.wait(0.3)
 				end
 			end
 		end)
 
-		-- Method 1: Rivals Utility.Raycast (direct table assign — most reliable for Rivals)
 		task.spawn(function()
 			local hooked = false
-			for _ = 1, 30 do
+			for _ = 1, 40 do
 				if hooked then break end
 				pcall(function()
-					local modules = ReplicatedStorage:FindFirstChild("Modules") or ReplicatedStorage:WaitForChild("Modules", 2)
+					local modules = ReplicatedStorage:FindFirstChild("Modules") or ReplicatedStorage:WaitForChild("Modules", 1)
 					if not modules then return end
 					local utilityMod = modules:FindFirstChild("Utility")
 					if not utilityMod then return end
 					local utility = require(utilityMod)
 					if type(utility) ~= "table" or type(utility.Raycast) ~= "function" then return end
-					if utility.__AntiRivalSA then return end
+					if utility.__AntiRivalSAv8 then return end
 					local oldRaycast = utility.Raycast
 					utility.Raycast = function(self, origin, target, distance, filter, ...)
-						if S.silentAimOn and typeof(origin) == "Vector3" then
-							local part = env._silentAimTarget or _saCachedPart
-							if part and part.Parent then
-								return oldRaycast(self, origin, part.Position, distance, filter, ...)
+						-- Only Rivals gun rays (distance marker 999)
+						if S.silentAimOn and type(distance) == "number" and distance >= 990 and distance <= 1010 then
+							if typeof(origin) == "Vector3" then
+								local part = env._silentAimTarget
+								if part and part.Parent then
+									return oldRaycast(self, origin, part.Position, distance, filter, ...)
+								end
 							end
 						end
 						return oldRaycast(self, origin, target, distance, filter, ...)
 					end
-					utility.__AntiRivalSA = true
+					utility.__AntiRivalSAv8 = true
 					hooked = true
-					print("[Anti-rival] Silent Aim: Utility.Raycast OK")
+					print("[Anti-rival] Silent Aim")
 				end)
-				if not hooked then task.wait(1) end
+				if not hooked then task.wait(0.75) end
 			end
 			if not hooked then
-				warn("[Anti-rival] Utility.Raycast not found — try again in a match")
+				warn("[Anti-rival] Silent Aim: enter match so Modules.Utility loads")
 			end
 		end)
 
-		-- Method 2: workspace:Raycast namecall (fallback, with re-entry guard)
-		pcall(function()
-			if not getrawmetatable or not setreadonly or not newcclosure or not getnamecallmethod then
-				return
-			end
-			if env._AntiRivalWSRayHook then return end
-			local mt = getrawmetatable(game)
-			if not mt or not mt.__namecall then return end
-			local oldNc = mt.__namecall
-			local busy = false
-			setreadonly(mt, false)
-			mt.__namecall = newcclosure(function(self, ...)
-				if busy then
-					return oldNc(self, ...)
-				end
-				if S.silentAimOn and (self == Workspace or self == workspace) then
-					local method = getnamecallmethod()
-					if method == "Raycast" then
-						local args = { ... }
-						local origin = args[1]
-						if typeof(origin) == "Vector3" then
-							local part = env._silentAimTarget or _saCachedPart
-							if part and part.Parent then
-								busy = true
-								local dir = (part.Position - origin)
-								if dir.Magnitude > 0.01 then
-									args[2] = dir.Unit * math.max(dir.Magnitude, 999)
-								end
-								local results = { oldNc(self, unpack(args)) }
-								busy = false
-								return unpack(results)
-							end
-						end
-					end
-				end
-				return oldNc(self, ...)
-			end)
-			setreadonly(mt, true)
-			env._AntiRivalWSRayHook = true
-			print("[Anti-rival] Silent Aim: Workspace.Raycast fallback OK")
-		end)
-
-		local function _tcAddConsumer()
+local function _tcAddConsumer()
 			_tcConsumers = _tcConsumers + 1
 			if fovCircle and _tcConsumers > 0 then fovCircle.Visible = true end
 		end
@@ -677,56 +639,65 @@ local function initMainScript()
 		end
 
 		local function StartKillDesync()
-			-- Only when NO alive enemies
-			if countAliveEnemies() > 0 then
-				return
-			end
+			if countAliveEnemies() > 0 then return end
 			if _killDesyncActive then return end
 			_killDesyncActive = true
-
-			local Players = game:GetService("Players")
-			local RunService = game:GetService("RunService")
 			local LP = Players.LocalPlayer
+			local lastFarTp = 0
+			local localAnchorCF = nil
 
 			local function getRoot()
 				local char = LP.Character
 				return char and char:FindFirstChild("HumanoidRootPart")
 			end
 
-			local root = getRoot()
-			local basePos = root and root.Position or Vector3.zero
-			local farPos = basePos + Vector3.new(FAR_DISTANCE, 150000, FAR_DISTANCE * 0.37)
-
-			print("[Anti-rival] No enemies left → Far Desync ON")
+			print("[Anti-rival] Ragebot: all enemies dead → strong far desync TP")
 
 			_killDesyncConn = RunService.Heartbeat:Connect(function()
 				if not _killDesyncActive then return end
-
 				if countAliveEnemies() > 0 then
+					StopKillDesync()
+					return
+				end
+				-- only while ragebot on
+				if not S.ragebotOn then
 					StopKillDesync()
 					return
 				end
 
 				local r = getRoot()
 				if not r then return end
+				if not localAnchorCF then
+					localAnchorCF = r.CFrame
+				end
 
-				local savedCF = r.CFrame
-				local savedVel = r.AssemblyLinearVelocity
-				local savedRot = r.AssemblyAngularVelocity
+				local now = os.clock()
+				-- Every 3s pick a new far position (~500000 studs)
+				if now - lastFarTp >= 3 then
+					lastFarTp = now
+					local ang = math.random() * math.pi * 2
+					local far = Vector3.new(
+						math.cos(ang) * 500000 + math.random(-2000, 2000),
+						150000 + math.random(-5000, 5000),
+						math.sin(ang) * 500000 + math.random(-2000, 2000)
+					)
+					env._killDesyncFarPos = far
+				end
+				local farPos = env._killDesyncFarPos or (r.Position + Vector3.new(500000, 150000, 0))
 
-				-- What others see
-				r.CFrame = CFrame.new(farPos + Vector3.new(
-					math.random(-80, 80),
-					math.random(-30, 30),
-					math.random(-80, 80)
-				))
+				local savedCF = localAnchorCF
+				local savedVel = Vector3.zero
+				local savedRot = Vector3.zero
+
+				-- What others see: far away random
+				r.CFrame = CFrame.new(farPos + Vector3.new(math.random(-120, 120), math.random(-40, 40), math.random(-120, 120)))
 				r.AssemblyLinearVelocity = Vector3.zero
 				r.AssemblyAngularVelocity = Vector3.zero
 
-				-- Local restore (invisible to self)
+				-- Local view: stay at anchor (desync spoof)
 				RunService:BindToRenderStep(_killDesyncRestoreName, Enum.RenderPriority.Camera.Value - 1, function()
 					local r2 = getRoot()
-					if r2 then
+					if r2 and savedCF then
 						r2.CFrame = savedCF
 						r2.AssemblyLinearVelocity = savedVel
 						r2.AssemblyAngularVelocity = savedRot
@@ -856,7 +827,8 @@ local function initMainScript()
 
 					if not self.__desync or self.__curr ~= target then
 						self:__desync_start(target)
-						task.wait(0.1)
+						local stab = tonumber(env._ragebotStability) or tonumber(S.ragebotStability) or 0.15
+						task.wait(math.clamp(stab, 0.01, 1))
 					end
 
 					if self.__task1 then
@@ -876,7 +848,8 @@ local function initMainScript()
 					data[utf8.char(2)] = head
 					data[utf8.char(3)] = UtilityModule:EncodeCFrame(offset)
 
-					self.__task1 = task.delay(0.15, function()
+					local frames = tonumber(env._ragebotShootFrames) or tonumber(S.ragebotShootFrames) or 1
+					self.__task1 = task.delay(0.05 * math.clamp(frames, 1, 10), function()
 						self:__desync_stop()
 					end)
 
@@ -1337,7 +1310,7 @@ local function initMainScript()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.2.8.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.2.9.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -1355,7 +1328,7 @@ local function initMainScript()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.2.8.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.2.9.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -1382,7 +1355,7 @@ local function initMainScript()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.8.0)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.9.0)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1608,7 +1581,7 @@ local function initMainScript()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.2.8.0 - discord.gg/Nv4WVHXhh"
+		title.Text = "Anti-rival beta v0.2.9.0 - discord.gg/Nv4WVHXhh"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -1839,7 +1812,7 @@ local function initMainScript()
 			end)
 			local fightButton = toggle(gMain1, "fight mode", UDim2.fromOffset(8, 126))
 
-			local gMain2 = createGroupBox(mainPage, "combat features", UDim2.fromOffset(418, 640), UDim2.fromOffset(12, 192))
+			local gMain2 = createGroupBox(mainPage, "combat features", UDim2.fromOffset(418, 700), UDim2.fromOffset(12, 192))
 			local aimbotButton = toggle(gMain2, "aimbot", UDim2.fromOffset(8, 22))
 			local aimbotStrengthSlider = createSlider(gMain2, "aimbot strength", 1, 100, S.aimbotStrength or 40, UDim2.fromOffset(8, 52), function(val)
 				S.aimbotStrength = val
@@ -2016,78 +1989,199 @@ local function initMainScript()
 			refreshHitPartUI()
 
 			local ragebotButton = toggle(gMain2, "ragebot", UDim2.fromOffset(8, 390))
-			local auraButton = toggle(gMain2, "aura", UDim2.fromOffset(8, 420))
-			local triggerBotButton = toggle(gMain2, "trigger bot", UDim2.fromOffset(8, 450))
-			local godModeButton = toggle(gMain2, "god mode", UDim2.fromOffset(8, 480))
-			
-			local rapidFireButton = toggle(gMain2, "Rapid Fire & Fast ADS", UDim2.fromOffset(8, 510))
-			local noRecoilButton = toggle(gMain2, "No Recoil / No Spread", UDim2.fromOffset(8, 540))
+			-- Stability / Shoot Frames (applied to ragebot desync timing)
+			local rageStabSlider = createSlider(gMain2, "Stability", 1, 100, math.floor((S.ragebotStability or 0.15) * 100), UDim2.fromOffset(8, 420), function(val)
+				S.ragebotStability = math.clamp(val / 100, 0.01, 1)
+				env._ragebotStability = S.ragebotStability
+			end)
+			local rageFramesSlider = createSlider(gMain2, "Shoot Frames", 1, 10, S.ragebotShootFrames or 1, UDim2.fromOffset(8, 460), function(val)
+				S.ragebotShootFrames = math.clamp(math.floor(val), 1, 10)
+				env._ragebotShootFrames = S.ragebotShootFrames
+			end)
+			env._ragebotStability = S.ragebotStability or 0.15
+			env._ragebotShootFrames = S.ragebotShootFrames or 1
+			local auraButton = toggle(gMain2, "aura", UDim2.fromOffset(8, 500))
+			local triggerBotButton = toggle(gMain2, "trigger bot", UDim2.fromOffset(8, 530))
+			local godModeButton = toggle(gMain2, "god mode", UDim2.fromOffset(8, 560))
+			local rapidFireButton = toggle(gMain2, "Rapid Fire & Fast ADS", UDim2.fromOffset(8, 590))
+			local noRecoilButton = toggle(gMain2, "No Recoil / No Spread", UDim2.fromOffset(8, 620))
 
 			local gWorld1 = createGroupBox(worldPage, "world & utilities", UDim2.fromOffset(418, 100), UDim2.fromOffset(12, 12))
 			local wallbangButton = toggle(gWorld1, "projectile wallbang", UDim2.fromOffset(8, 22))
 			local forceThirdPersonButton = toggle(gWorld1, "force 3rd person (rivals)", UDim2.fromOffset(8, 52))
 
-			local gEsp1 = createGroupBox(espPage, "visual esp options", UDim2.fromOffset(418, 230), UDim2.fromOffset(12, 12))
-			local espButton = toggle(gEsp1, "player esp", UDim2.fromOffset(8, 22))
-			local namesButton = toggle(gEsp1, "player names", UDim2.fromOffset(8, 52))
-			local healthButton = toggle(gEsp1, "player health text", UDim2.fromOffset(8, 82))
+			local gEsp1 = createGroupBox(espPage, "visual esp options", UDim2.fromOffset(418, 620), UDim2.fromOffset(12, 12))
+			local espButton = toggle(gEsp1, "Enemy Box / master", UDim2.fromOffset(8, 22))
+			local namesButton = toggle(gEsp1, "Enemy Name", UDim2.fromOffset(8, 52))
+			local healthButton = toggle(gEsp1, "Enemy Health", UDim2.fromOffset(8, 82))
+			local espDistBtn = toggle(gEsp1, "Enemy Distance", UDim2.fromOffset(8, 112))
+			local espRankBtn = toggle(gEsp1, "Enemy Rank", UDim2.fromOffset(8, 142))
+			local espWsBtn = toggle(gEsp1, "Enemy Winstreak", UDim2.fromOffset(8, 172))
+			local espNumBtn = toggle(gEsp1, "Number Enemy", UDim2.fromOffset(8, 202))
+			local espWepBtn = toggle(gEsp1, "Held Weapon", UDim2.fromOffset(8, 232))
+			local espDefBtn = toggle(gEsp1, "Enemy Deflecting", UDim2.fromOffset(8, 262))
+			local espGeoBtn = toggle(gEsp1, "GEOMETRY", UDim2.fromOffset(8, 292))
+			-- wire new ESP toggles
+			espDistBtn.MouseButton1Click:Connect(function() S.espEnemyDistance = not S.espEnemyDistance; setToggle(espDistBtn, S.espEnemyDistance, "Enemy Distance") end)
+			espRankBtn.MouseButton1Click:Connect(function() S.espEnemyRank = not S.espEnemyRank; setToggle(espRankBtn, S.espEnemyRank, "Enemy Rank") end)
+			espWsBtn.MouseButton1Click:Connect(function() S.espEnemyWinstreak = not S.espEnemyWinstreak; setToggle(espWsBtn, S.espEnemyWinstreak, "Enemy Winstreak") end)
+			espNumBtn.MouseButton1Click:Connect(function() S.espNumberEnemy = not S.espNumberEnemy; setToggle(espNumBtn, S.espNumberEnemy, "Number Enemy") end)
+			espWepBtn.MouseButton1Click:Connect(function() S.espHeldWeapon = not S.espHeldWeapon; setToggle(espWepBtn, S.espHeldWeapon, "Held Weapon") end)
+			espDefBtn.MouseButton1Click:Connect(function() S.espEnemyDeflecting = not S.espEnemyDeflecting; setToggle(espDefBtn, S.espEnemyDeflecting, "Enemy Deflecting") end)
+			espGeoBtn.MouseButton1Click:Connect(function() S.espGeometry = not S.espGeometry; setToggle(espGeoBtn, S.espGeometry, "GEOMETRY") end)
+			-- master box uses S.espOn / S.espEnemyBox
+			S.espEnemyBox = S.espOn
 
 			local espPreviewFrame = Instance.new("Frame")
-			espPreviewFrame.Size = UDim2.new(1, -16, 0, 100)
-			espPreviewFrame.Position = UDim2.fromOffset(8, 116)
-			espPreviewFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+			espPreviewFrame.Size = UDim2.new(1, -16, 0, 220)
+			espPreviewFrame.Position = UDim2.fromOffset(8, 330)
+			espPreviewFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
 			espPreviewFrame.BorderColor3 = Color3.fromRGB(45, 45, 60)
 			espPreviewFrame.BorderSizePixel = 1
 			espPreviewFrame.Parent = gEsp1
+
 			local espPreviewTitle = Instance.new("TextLabel")
-			espPreviewTitle.Size = UDim2.new(1, -8, 0, 16)
-			espPreviewTitle.Position = UDim2.fromOffset(4, 2)
+			espPreviewTitle.Size = UDim2.new(1, -8, 0, 18)
+			espPreviewTitle.Position = UDim2.fromOffset(6, 4)
 			espPreviewTitle.BackgroundTransparency = 1
-			espPreviewTitle.Text = "ESP Live Preview"
-			espPreviewTitle.TextColor3 = Color3.fromRGB(140, 140, 155)
-			espPreviewTitle.TextSize = 11
+			espPreviewTitle.Text = "ESP LIVE PREVIEW"
+			espPreviewTitle.TextColor3 = Color3.fromRGB(100, 180, 255)
+			espPreviewTitle.TextSize = 12
 			espPreviewTitle.Font = Enum.Font.Code
 			espPreviewTitle.TextXAlignment = Enum.TextXAlignment.Left
 			espPreviewTitle.Parent = espPreviewFrame
-			local espPreviewBox = Instance.new("Frame")
-			espPreviewBox.Size = UDim2.fromOffset(70, 70)
-			espPreviewBox.Position = UDim2.fromOffset(12, 22)
-			espPreviewBox.BackgroundTransparency = 1
-			espPreviewBox.BorderSizePixel = 2
-			espPreviewBox.BorderColor3 = Color3.fromRGB(255, 255, 255)
-			espPreviewBox.Parent = espPreviewFrame
-			local espPreviewName = Instance.new("TextLabel")
-			espPreviewName.Size = UDim2.fromOffset(180, 22)
-			espPreviewName.Position = UDim2.fromOffset(95, 28)
-			espPreviewName.BackgroundTransparency = 1
-			espPreviewName.Text = "PlayerName"
-			espPreviewName.TextColor3 = Color3.fromRGB(255, 255, 255)
-			espPreviewName.TextSize = 18
-			espPreviewName.Font = Enum.Font.GothamBold
-			espPreviewName.TextXAlignment = Enum.TextXAlignment.Left
-			espPreviewName.Parent = espPreviewFrame
-			local espPreviewHp = Instance.new("TextLabel")
-			espPreviewHp.Size = UDim2.fromOffset(180, 20)
-			espPreviewHp.Position = UDim2.fromOffset(95, 52)
-			espPreviewHp.BackgroundTransparency = 1
-			espPreviewHp.Text = "HP: 100 / 100"
-			espPreviewHp.TextColor3 = Color3.fromRGB(100, 180, 255)
-			espPreviewHp.TextSize = 16
-			espPreviewHp.Font = Enum.Font.GothamBold
-			espPreviewHp.TextXAlignment = Enum.TextXAlignment.Left
-			espPreviewHp.Parent = espPreviewFrame
+
+			-- Character silhouette area
+			local charStage = Instance.new("Frame")
+			charStage.Name = "CharStage"
+			charStage.Size = UDim2.fromOffset(110, 170)
+			charStage.Position = UDim2.fromOffset(12, 28)
+			charStage.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+			charStage.BorderColor3 = Color3.fromRGB(50, 50, 65)
+			charStage.BorderSizePixel = 1
+			charStage.Parent = espPreviewFrame
+
+			-- Simple character body (box outline = Enemy Box)
+			local bodyBox = Instance.new("Frame")
+			bodyBox.Name = "BodyBox"
+			bodyBox.Size = UDim2.fromOffset(48, 90)
+			bodyBox.Position = UDim2.fromOffset(31, 50)
+			bodyBox.BackgroundTransparency = 1
+			bodyBox.BorderSizePixel = 2
+			bodyBox.BorderColor3 = Color3.fromRGB(255, 255, 255)
+			bodyBox.Parent = charStage
+
+			local headPart = Instance.new("Frame")
+			headPart.Name = "HeadPart"
+			headPart.Size = UDim2.fromOffset(28, 28)
+			headPart.Position = UDim2.fromOffset(41, 18)
+			headPart.BackgroundColor3 = Color3.fromRGB(200, 200, 210)
+			headPart.BorderSizePixel = 0
+			headPart.Parent = charStage
+			Instance.new("UICorner", headPart).CornerRadius = UDim.new(1, 0)
+
+			local torsoPart = Instance.new("Frame")
+			torsoPart.Name = "TorsoPart"
+			torsoPart.Size = UDim2.fromOffset(36, 44)
+			torsoPart.Position = UDim2.fromOffset(37, 50)
+			torsoPart.BackgroundColor3 = Color3.fromRGB(90, 100, 140)
+			torsoPart.BorderSizePixel = 0
+			torsoPart.Parent = charStage
+
+			local legL = Instance.new("Frame")
+			legL.Size = UDim2.fromOffset(14, 36)
+			legL.Position = UDim2.fromOffset(37, 96)
+			legL.BackgroundColor3 = Color3.fromRGB(60, 65, 90)
+			legL.BorderSizePixel = 0
+			legL.Parent = charStage
+			local legR = Instance.new("Frame")
+			legR.Size = UDim2.fromOffset(14, 36)
+			legR.Position = UDim2.fromOffset(59, 96)
+			legR.BackgroundColor3 = Color3.fromRGB(60, 65, 90)
+			legR.BorderSizePixel = 0
+			legR.Parent = charStage
+
+			-- GEOMETRY fill overlay
+			local geoFill = Instance.new("Frame")
+			geoFill.Name = "GeoFill"
+			geoFill.Size = UDim2.fromOffset(48, 90)
+			geoFill.Position = UDim2.fromOffset(31, 50)
+			geoFill.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+			geoFill.BackgroundTransparency = 0.55
+			geoFill.BorderSizePixel = 0
+			geoFill.Visible = false
+			geoFill.Parent = charStage
+
+			-- Info text stack (right side)
+			local infoStack = Instance.new("TextLabel")
+			infoStack.Name = "InfoStack"
+			infoStack.Size = UDim2.fromOffset(260, 170)
+			infoStack.Position = UDim2.fromOffset(135, 28)
+			infoStack.BackgroundTransparency = 1
+			infoStack.Text = ""
+			infoStack.TextColor3 = Color3.fromRGB(230, 230, 240)
+			infoStack.TextSize = 13
+			infoStack.Font = Enum.Font.GothamBold
+			infoStack.TextXAlignment = Enum.TextXAlignment.Left
+			infoStack.TextYAlignment = Enum.TextYAlignment.Top
+			infoStack.TextStrokeTransparency = 0.3
+			infoStack.Parent = espPreviewFrame
+
 			local function refreshEspPreview()
-				espPreviewBox.Visible = S.espOn
-				espPreviewBox.BorderColor3 = S.espOn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(60, 60, 70)
-				espPreviewName.Visible = S.namesOn
-				espPreviewHp.Visible = S.healthOn
-				espPreviewTitle.Text = "ESP Live Preview  |  outline=" .. tostring(S.espOn) .. " name=" .. tostring(S.namesOn) .. " hp=" .. tostring(S.healthOn)
+				local lines = {}
+				local showBox = S.espOn or S.espEnemyBox
+				bodyBox.Visible = showBox
+				bodyBox.BorderColor3 = showBox and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(60, 60, 70)
+				geoFill.Visible = S.espGeometry and true or false
+				if S.espGeometry then
+					torsoPart.BackgroundTransparency = 0.3
+					headPart.BackgroundTransparency = 0.3
+				else
+					torsoPart.BackgroundTransparency = 0
+					headPart.BackgroundTransparency = 0
+				end
+
+				if S.namesOn or S.espEnemyName then
+					table.insert(lines, "EnemyName")
+				end
+				if S.healthOn or S.espEnemyHealth then
+					table.insert(lines, "HP 100 / 100")
+				end
+				if S.espEnemyDistance then
+					table.insert(lines, "42m")
+				end
+				if S.espEnemyRank then
+					table.insert(lines, "Rank Gold")
+				end
+				if S.espEnemyWinstreak then
+					table.insert(lines, "WS 12")
+				end
+				if S.espNumberEnemy then
+					table.insert(lines, "#4821")
+				end
+				if S.espHeldWeapon then
+					table.insert(lines, "Wep Assault Rifle")
+				end
+				if S.espEnemyDeflecting then
+					table.insert(lines, "DEFLECTING")
+				end
+				if showBox then
+					table.insert(lines, "[Box ON]")
+				end
+				if S.espGeometry then
+					table.insert(lines, "[GEOMETRY ON]")
+				end
+				if #lines == 0 then
+					table.insert(lines, "(no ESP options on)")
+				end
+				infoStack.Text = table.concat(lines, "\n")
+				espPreviewTitle.Text = "ESP LIVE PREVIEW  |  options active: " .. tostring(#lines)
 			end
 			refreshEspPreview()
 			task.spawn(function()
 				while espPreviewFrame and espPreviewFrame.Parent do
 					pcall(refreshEspPreview)
-					task.wait(0.25)
+					task.wait(0.2)
 				end
 			end)
 
@@ -3037,7 +3131,7 @@ local function initMainScript()
 					pcall(function()
 						if title then title.TextColor3 = col; title.Font = font end
 						if kbTitle then
-							kbTitle.Text = '<font color="rgb(' .. math.floor(col.R*255) .. ',' .. math.floor(col.G*255) .. ',' .. math.floor(col.B*255) .. ')">Keybinds (Anti-rival beta v0.2.8.0)</font>'
+							kbTitle.Text = '<font color="rgb(' .. math.floor(col.R*255) .. ',' .. math.floor(col.G*255) .. ',' .. math.floor(col.B*255) .. ')">Keybinds (Anti-rival beta v0.2.9.0)</font>'
 							kbTitle.Font = font
 						end
 						if watermarkLabel then watermarkLabel.Font = font end
@@ -3083,7 +3177,7 @@ local function initMainScript()
 					pcall(function()
 						featureBtn.Size = UDim2.new(1, -70, featureBtn.Size.Y.Scale, featureBtn.Size.Y.Offset)
 						local bindBtn = Instance.new("TextButton")
-						bindBtn.Name = "FeatureBindBtn"
+						bindBtn.Name = "FeatureBindBtn_" .. featureName
 						bindBtn.Size = UDim2.fromOffset(58, featureBtn.Size.Y.Offset > 0 and featureBtn.Size.Y.Offset or 26)
 						bindBtn.Position = UDim2.new(1, -62, 0, featureBtn.Position.Y.Offset)
 						bindBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
@@ -3122,6 +3216,8 @@ local function initMainScript()
 					{btn = refs.teleporterButton, name = "teleporter"},
 					{btn = refs.orbitButton, name = "orbit"},
 					{btn = refs.voidSpanButton, name = "voidSpan"},
+					{btn = refs.rapidFireButton, name = "rapidFire"},
+					{btn = refs.noRecoilButton, name = "noRecoil"},
 				}
 				for _, info in ipairs(bindTargets) do
 					if info.btn then attachBindButton(info.btn, info.name) end
@@ -4539,7 +4635,7 @@ local function initMainScript()
 
 			toggleEsp = function(state)
 				S.espOn = state
-				setToggle(espButton, S.espOn, "player esp")
+				setToggle(espButton, S.espOn, "Enemy Box / master")
 			end
 
 			do -- ESP isolated scope (register limit)
@@ -4557,78 +4653,92 @@ local function initMainScript()
 					if p == player then return end
 					local char = p.Character
 					local hum = char and char:FindFirstChildOfClass("Humanoid")
-				
-					if (not S.espOn and not S.namesOn and not S.healthOn) or not char or not char:FindFirstChild("HumanoidRootPart") then
+					local anyEsp = S.espOn or S.espEnemyBox or S.namesOn or S.healthOn or S.espEnemyDistance or S.espEnemyRank or S.espEnemyWinstreak or S.espNumberEnemy or S.espHeldWeapon or S.espEnemyDeflecting or S.espGeometry
+					if (not anyEsp) or not char or not char:FindFirstChild("HumanoidRootPart") then
 						removeEsp(p)
 						return
 					end
-	
+
 					local highlight = espCache[p] and espCache[p].Highlight
-					if S.espOn then
+					if S.espOn or S.espEnemyBox then
 						if not highlight or not highlight.Parent then
 							highlight = Instance.new("Highlight")
 							highlight.Name = "AntiRivalESP"
 							highlight.Adornee = char
 							highlight.FillColor = Color3.fromRGB(255, 50, 50)
-						highlight.OutlineTransparency = 0
-							highlight.FillTransparency = 1
+							highlight.OutlineTransparency = 0
+							highlight.FillTransparency = S.espGeometry and 0.55 or 1
 							highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 							highlight.Parent = char
 						else
 							highlight.Adornee = char
+							highlight.FillTransparency = S.espGeometry and 0.55 or 1
 						end
 					else
 						if highlight then highlight:Destroy(); highlight = nil end
 					end
-	
+
 					local head = char:FindFirstChild("Head")
 					local infoBillboard = espCache[p] and espCache[p].InfoBillboard
-	
-					if (S.namesOn or S.healthOn) and head then
+					local needText = S.namesOn or S.healthOn or S.espEnemyDistance or S.espEnemyRank or S.espEnemyWinstreak or S.espNumberEnemy or S.espHeldWeapon or S.espEnemyDeflecting
+					if needText and head then
 						if not infoBillboard or not infoBillboard.Parent then
 							infoBillboard = Instance.new("BillboardGui")
 							infoBillboard.Name = "AntiRivalInfo"
-							infoBillboard.Size = UDim2.new(0, 200, 0, 50)
-							infoBillboard.StudsOffset = Vector3.new(0, 3.0, 0)
+							infoBillboard.Size = UDim2.new(0, 240, 0, 120)
+							infoBillboard.StudsOffset = Vector3.new(0, 3.2, 0)
 							infoBillboard.AlwaysOnTop = true
 							infoBillboard.Adornee = head
-	
-							local nameText = Instance.new("TextLabel")
-							nameText.Name = "NameText"
-							nameText.Size = UDim2.new(1, 0, 0, 20)
-							nameText.BackgroundTransparency = 1
-							nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
-							nameText.TextSize, nameText.Font = 18, Enum.Font.GothamBold
-							nameText.TextStrokeTransparency = 0
-							nameText.Parent = infoBillboard
-	
-							local healthText = Instance.new("TextLabel")
-							healthText.Name = "HealthText"
-							healthText.Position = UDim2.fromOffset(0, 20)
-							healthText.Size = UDim2.new(1, 0, 0, 20)
-							healthText.BackgroundTransparency = 1
-							healthText.TextColor3 = Color3.fromRGB(100, 180, 255)
-							healthText.TextSize, healthText.Font = 16, Enum.Font.GothamBold
-							healthText.TextStrokeTransparency = 0
-							healthText.Parent = infoBillboard
-	
+							local lbl = Instance.new("TextLabel")
+							lbl.Name = "InfoText"
+							lbl.Size = UDim2.new(1, 0, 1, 0)
+							lbl.BackgroundTransparency = 1
+							lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+							lbl.TextSize = 14
+							lbl.Font = Enum.Font.GothamBold
+							lbl.TextStrokeTransparency = 0.2
+							lbl.TextYAlignment = Enum.TextYAlignment.Top
+							lbl.Parent = infoBillboard
 							infoBillboard.Parent = head
 						else
 							infoBillboard.Adornee = head
 						end
-	
-						local nameLabel = infoBillboard:FindFirstChild("NameText")
-						local healthLabel = infoBillboard:FindFirstChild("HealthText")
-	
-						if nameLabel then nameLabel.Visible = S.namesOn; nameLabel.Text = p.Name end
-						if healthLabel then
-							healthLabel.Visible = (S.healthOn and hum ~= nil)
-							if hum then healthLabel.Text = "HP: " .. math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth) end
+						local lines = {}
+						if S.namesOn or S.espEnemyName then table.insert(lines, p.Name) end
+						if S.healthOn or S.espEnemyHealth then
+							if hum then table.insert(lines, "HP " .. math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth)) end
 						end
+						if S.espEnemyDistance then
+							local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+							local tRoot = char:FindFirstChild("HumanoidRootPart")
+							if myRoot and tRoot then
+								table.insert(lines, string.format("%.0fm", (myRoot.Position - tRoot.Position).Magnitude))
+							end
+						end
+						if S.espEnemyRank then
+							local rank = p:GetAttribute("Rank") or p:GetAttribute("RankedRank") or "?"
+							table.insert(lines, "Rank " .. tostring(rank))
+						end
+						if S.espEnemyWinstreak then
+							local ws = p:GetAttribute("WinStreak") or p:GetAttribute("Winstreak") or p:GetAttribute("WS") or "?"
+							table.insert(lines, "WS " .. tostring(ws))
+						end
+						if S.espNumberEnemy then
+							table.insert(lines, "#" .. tostring(p.UserId % 10000))
+						end
+						if S.espHeldWeapon then
+							local tool = char:FindFirstChildOfClass("Tool")
+							table.insert(lines, "Wep " .. (tool and tool.Name or "none"))
+						end
+						if S.espEnemyDeflecting then
+							local def = p:GetAttribute("Deflecting") or p:GetAttribute("IsDeflecting") or false
+							if def then table.insert(lines, "DEFLECTING") end
+						end
+						local infoLabel = infoBillboard:FindFirstChild("InfoText")
+						if infoLabel then infoLabel.Text = table.concat(lines, "\n") end
 					else
 						if infoBillboard then infoBillboard:Destroy(); infoBillboard = nil end
 					end
-	
 					espCache[p] = { Highlight = highlight, InfoBillboard = infoBillboard }
 				end
 	
@@ -5000,8 +5110,8 @@ local function initMainScript()
 			end)
 
 			espButton.MouseButton1Click:Connect(function() if toggleEsp then toggleEsp(not S.espOn) end end)
-			namesButton.MouseButton1Click:Connect(function() S.namesOn = not S.namesOn; setToggle(namesButton, S.namesOn, "player names") end)
-			healthButton.MouseButton1Click:Connect(function() S.healthOn = not S.healthOn; setToggle(healthButton, S.healthOn, "player health text") end)
+			namesButton.MouseButton1Click:Connect(function() S.namesOn = not S.namesOn; S.espEnemyName = S.namesOn; setToggle(namesButton, S.namesOn, "Enemy Name") end)
+			healthButton.MouseButton1Click:Connect(function() S.healthOn = not S.healthOn; S.espEnemyHealth = S.healthOn; setToggle(healthButton, S.healthOn, "Enemy Health") end)
 
 			infiniteJumpButton.MouseButton1Click:Connect(function() S.infiniteJumpOn = not S.infiniteJumpOn; setToggle(infiniteJumpButton, S.infiniteJumpOn, "infinite jump") end)
 
@@ -5047,12 +5157,17 @@ local function initMainScript()
 				teleporterButton = U.teleporterButton,
 				orbitButton = U.orbitButton,
 				voidSpanButton = U.voidSpanButton,
+				rapidFireButton = U.rapidFireButton,
+				noRecoilButton = U.noRecoilButton,
 				toggleEsp = toggleEsp,
 				toggleNoclip = toggleNoclip,
 				toggleFight = toggleFight,
 			}
 			if type(setupFeatureBindsAndTheme) == "function" then
 				setupFeatureBindsAndTheme()
+				task.defer(function()
+					pcall(setupFeatureBindsAndTheme)
+				end)
 			end
 		end)
 		env._antiRivalRefreshUI = function()
@@ -5079,7 +5194,7 @@ local function initMainScript()
 				local noRecoilButton = env._pageUI and env._pageUI.noRecoilButton
 				if walkButton then setToggle(walkButton, S.walkOn, "walk speed") end
 				if fightButton then setToggle(fightButton, S.fightOn, "fight mode") end
-				if espButton then setToggle(espButton, S.espOn, "player esp") end
+				if espButton then setToggle(espButton, S.espOn, "Enemy Box / master") end
 				if namesButton then setToggle(namesButton, S.namesOn, "player names") end
 				if healthButton then setToggle(healthButton, S.healthOn, "player health text") end
 				if noclipButton then setToggle(noclipButton, S.noclipOn, "noclip") end
@@ -5134,7 +5249,7 @@ local function initMainScript()
 
 		pcall(function() showPage("main") end)
 		if gui then gui.Enabled = true end
-		print("Anti-rival beta v0.2.8.0 Enhanced & Loaded Successfully! (Silent Aim v5 + Skin Menu + Skybox + Triggerbot)")
+		print("Anti-rival beta v0.2.9.0 Enhanced & Loaded Successfully!")
 	end)
 end
 
@@ -5174,7 +5289,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.8.0)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.9.0)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
