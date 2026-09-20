@@ -1,4 +1,4 @@
--- [Anti-rival beta v0.2.9.0 재배포 금지 재배포 시 IP 딸거임]
+-- [Anti-rival beta v0.2.9.1 재배포 금지 재배포 시 IP 딸거임]
 
 local KEY_SYSTEM_ENABLED = true
 local CORRECT_KEY = "ieoAfiuAfuagzsrzguorsziuornfuo1"
@@ -563,7 +563,7 @@ local function initMainScript()
 					end
 					utility.__AntiRivalSAv8 = true
 					hooked = true
-					print("[Anti-rival] Silent Aim")
+					print("[Anti-rival] Silent Aim v8 (shoot rays only, no char move)")
 				end)
 				if not hooked then task.wait(0.75) end
 			end
@@ -1310,7 +1310,7 @@ local function _tcAddConsumer()
 		watermarkLabel.AutomaticSize = Enum.AutomaticSize.X
 		watermarkLabel.BackgroundTransparency = 1
 		watermarkLabel.RichText = true
-		watermarkLabel.Text = 'Anti-rival beta v0.2.9.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
+		watermarkLabel.Text = 'Anti-rival beta v0.2.9.1 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">60 FPS</font>'
 		watermarkLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
 		watermarkLabel.TextSize = 11
 		watermarkLabel.Font = Enum.Font.Code
@@ -1328,7 +1328,7 @@ local function _tcAddConsumer()
 				frameCount = 0
 				lastFpsUpdate = now
 				if S.showWatermarkOn then
-					watermarkLabel.Text = 'Anti-rival beta v0.2.9.0 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
+					watermarkLabel.Text = 'Anti-rival beta v0.2.9.1 | ' .. player.Name .. ' | <font color="rgb(100,180,255)">' .. currentFps .. ' FPS</font>'
 				end
 			end
 		end))
@@ -1355,7 +1355,7 @@ local function _tcAddConsumer()
 		kbTitle.Position = UDim2.fromOffset(10, 0)
 		kbTitle.BackgroundTransparency = 1
 		kbTitle.RichText = true
-		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.9.0)</font>'
+		kbTitle.Text = '<font color="rgb(100,180,255)">Keybinds (Anti-rival beta v0.2.9.1)</font>'
 		kbTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
 		kbTitle.TextSize = 11
 		kbTitle.Font = Enum.Font.Code
@@ -1581,7 +1581,7 @@ local function _tcAddConsumer()
 		title.Size = UDim2.new(0, 420, 1, 0)
 		title.Position = UDim2.fromOffset(10, 0)
 		title.BackgroundTransparency = 1
-		title.Text = "Anti-rival beta v0.2.9.0 - discord.gg/Nv4WVHXhh"
+		title.Text = "Anti-rival beta v0.2.9.1 - discord.gg/Nv4WVHXhh"
 		title.TextColor3 = Color3.fromRGB(160, 160, 175)
 		title.TextSize = 11
 		title.Font = Enum.Font.Code
@@ -3131,7 +3131,7 @@ local function _tcAddConsumer()
 					pcall(function()
 						if title then title.TextColor3 = col; title.Font = font end
 						if kbTitle then
-							kbTitle.Text = '<font color="rgb(' .. math.floor(col.R*255) .. ',' .. math.floor(col.G*255) .. ',' .. math.floor(col.B*255) .. ')">Keybinds (Anti-rival beta v0.2.9.0)</font>'
+							kbTitle.Text = '<font color="rgb(' .. math.floor(col.R*255) .. ',' .. math.floor(col.G*255) .. ',' .. math.floor(col.B*255) .. ')">Keybinds (Anti-rival beta v0.2.9.1)</font>'
 							kbTitle.Font = font
 						end
 						if watermarkLabel then watermarkLabel.Font = font end
@@ -4685,23 +4685,36 @@ local function _tcAddConsumer()
 						if not infoBillboard or not infoBillboard.Parent then
 							infoBillboard = Instance.new("BillboardGui")
 							infoBillboard.Name = "AntiRivalInfo"
-							infoBillboard.Size = UDim2.new(0, 240, 0, 120)
-							infoBillboard.StudsOffset = Vector3.new(0, 3.2, 0)
+							-- Fixed screen-pixel size (does not grow over the body at range)
+							infoBillboard.Size = UDim2.fromOffset(200, 130)
+							infoBillboard.StudsOffset = Vector3.new(4.2, 1.2, 0) -- side of head, not on body
 							infoBillboard.AlwaysOnTop = true
+							infoBillboard.MaxDistance = 2500
+							infoBillboard.LightInfluence = 0
 							infoBillboard.Adornee = head
 							local lbl = Instance.new("TextLabel")
 							lbl.Name = "InfoText"
 							lbl.Size = UDim2.new(1, 0, 1, 0)
 							lbl.BackgroundTransparency = 1
 							lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-							lbl.TextSize = 14
+							lbl.TextSize = 20
+							lbl.TextScaled = false
 							lbl.Font = Enum.Font.GothamBold
-							lbl.TextStrokeTransparency = 0.2
+							lbl.TextStrokeTransparency = 0.15
+							lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 							lbl.TextYAlignment = Enum.TextYAlignment.Top
+							lbl.TextXAlignment = Enum.TextXAlignment.Left
 							lbl.Parent = infoBillboard
 							infoBillboard.Parent = head
 						else
 							infoBillboard.Adornee = head
+							infoBillboard.StudsOffset = Vector3.new(4.2, 1.2, 0)
+							infoBillboard.Size = UDim2.fromOffset(200, 130)
+							local lbl = infoBillboard:FindFirstChild("InfoText")
+							if lbl then
+								lbl.TextSize = 20
+								lbl.TextScaled = false
+							end
 						end
 						local lines = {}
 						if S.namesOn or S.espEnemyName then table.insert(lines, p.Name) end
@@ -5249,7 +5262,7 @@ local function _tcAddConsumer()
 
 		pcall(function() showPage("main") end)
 		if gui then gui.Enabled = true end
-		print("Anti-rival beta v0.2.9.0 Enhanced & Loaded Successfully!")
+		print("Anti-rival beta v0.2.9.1 Enhanced & Loaded Successfully! (Silent Aim v7 + Skin Menu + Skybox + Triggerbot)")
 	end)
 end
 
@@ -5289,7 +5302,7 @@ else
 	keyTitle.Position = UDim2.fromOffset(0, 10)
 	keyTitle.BackgroundTransparency = 1
 	keyTitle.RichText = true
-	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.9.0)</font>'
+	keyTitle.Text = '<font color="rgb(100,180,255)">Anti-rival Key System (Anti-rival beta v0.2.9.1)</font>'
 	keyTitle.TextSize, keyTitle.Font = 13, Enum.Font.Code
 	keyTitle.TextXAlignment = Enum.TextXAlignment.Center
 	keyTitle.Parent = keyFrame
